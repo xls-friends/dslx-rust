@@ -9,6 +9,8 @@ pub enum Keyword {
   _For,
 }
 
+// Note that the String-typed tokens (`Identifier`) take Strings, and not references to Strings,
+// so as to eliminate a potential dependency on the input data during a parse.
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
   Keyword(Keyword),
@@ -27,6 +29,8 @@ pub enum TokenKind {
   Minus,
   Arrow,
   FatArrow,
+  // Special indicator that we've reached the end of the input.
+  EOF,
 }
 
 // Currently a placeholder, but will grow to include things like position and span.
