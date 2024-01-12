@@ -11,7 +11,7 @@ use nom::{
         alpha1, alphanumeric1
     },
     combinator::recognize,
-    multi::{ many0_count, separated_list1 },
+    multi::{ many0_count, separated_list0 },
     sequence::pair,
     IResult,
 };
@@ -51,10 +51,15 @@ pub fn eat_whitespace(input: &str) -> Result<&str, nom::Err<nom::error::Error<&s
     Ok(take_till(|c: char| { !c.is_whitespace() })(input)?.0)
 }
 
-// Simple whitespace-eating functions.
-pub fn ws_tag<'a>(input: &'a str, target: &'a str) -> Result<&'a str, nom::Err<nom::error::Error<&'a str>>> {
-    let remaining = eat_whitespace(input)?;
-    Ok(tag(target)(remaining)?.0)
+// Returns a parser that consumes preceding whitespace then runs the given parser.
+pub fn preceding_whitespace<'a, O, P>(mut parser: P,)
+	-> impl FnMut(&'a str) -> IResult<&str, O, nom::error::Error<&'a str>>
+	where
+    P: nom::Parser<&'a str, O, nom::error::Error<&'a str>> {
+	move |input: &str| {
+		let remaining = eat_whitespace(input)?;
+		parser.parse(remaining)
+	}
 }
 
 // Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
@@ -81,37 +86,26 @@ fn parse_param(input: &str) -> IResult<&str, Param> {
     Ok((remaining, Param { name: param_name, param_type: param_type }))
 }
 
-fn comma_ws(input: &str) -> IResult<&str, &str> {
-    let remaining = eat_whitespace(input)?;
-    tag(",")(remaining)
-}
-
-// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType, ...`.
+// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
 // Note that the list must _not_ end with a comma.
-fn parse_param_list(input: &str) -> IResult<&str, Vec<Param>> {
-    separated_list1(comma_ws, parse_param)(input)
+fn parse_param_list0(input: &str) -> IResult<&str, Vec<Param>> {
+    separated_list0(preceding_whitespace(tag(",")), parse_param)(input)
 }
 
-// Returns the AstNode for "fn".
+// Parses a function, e.g.:
+// ```
+//   fn foo(a: u32, b: u64) -> uN[128] {
+//      a as uN[128] + b as uN[128]
+//   }
+// ```
 // TODO: Parse beyond the signature.
 fn parse_function(input: &str) -> IResult<&str, FunctionNode> {
-    let remaining = ws_tag(input, "fn")?;
+    let remaining = preceding_whitespace(tag("fn"))(input)?.0;
     let (mut remaining, id) = parse_identifier(remaining)?;
-    remaining = ws_tag(remaining, "(")?;
-    // We'd also accept "Paramsda".
-    type ParamsLambda = fn(&str) -> IResult<&str, Vec<Param>>;
-    let no_haz_params : ParamsLambda = | x: &str | {
-        let (remaining, _) = tag(")")(x)?;
-        Ok((remaining, Vec::new()))
-    };
-    let haz_params : ParamsLambda = | x: &str | {
-            let (remaining, params) = parse_param_list(x)?;
-            let (remaining, _) = tag(")")(remaining)?;
-            Ok((remaining, params))
-        };
-
-    let (mut remaining, params) = alt((no_haz_params, haz_params))(remaining)?;
-    remaining = ws_tag(remaining, "->")?;
+    remaining = preceding_whitespace(tag("("))(remaining)?.0;
+	let (mut remaining, params) = parse_param_list0(remaining)?;
+    remaining = preceding_whitespace(tag(")"))(remaining)?.0;
+    remaining = preceding_whitespace(tag("->"))(remaining)?.0;
     let (remaining, ret_type) = parse_identifier(remaining)?;
 
     Ok((remaining, FunctionNode {
