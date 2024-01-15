@@ -9,7 +9,7 @@ use nom::{
     combinator::recognize,
     multi::{many0_count, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
-    IResult,
+    IResult, Parser,
 };
 
 // AST nodes. Will be moved to their own file.
@@ -74,31 +74,22 @@ pub fn parse_identifier(input: &str) -> IResult<&str, Identifier> {
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
     ));
-    let mut ws_p = preceding_whitespace(p);
-    ws_p(input).map(|(r, name)| {
-        (
-            r,
-            Identifier {
-                name: name.to_string(),
-            },
-        )
+    let ws_p = preceding_whitespace(p);
+    ws_p.map(|name| Identifier {
+        name: name.to_string(),
     })
+    .parse(input)
 }
 
 // Parses a single param, e.g., `x: u32`.
 fn parse_param(input: &str) -> IResult<&str, Param> {
     let name = parse_identifier;
     let param_type = preceded(tag_ws(":"), parse_identifier);
-    let mut p = tuple((name, param_type));
-    p(input).map(|(remaining, (n, pt))| {
-        (
-            remaining,
-            Param {
-                name: n,
-                param_type: pt,
-            },
-        )
-    })
+    let mut p = tuple((name, param_type)).map(|(name, param_type)| Param {
+        name: name,
+        param_type: param_type,
+    });
+    p.parse(input)
 }
 
 // Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
@@ -113,17 +104,13 @@ fn parse_function_signature(input: &str) -> IResult<&str, FunctionSignature> {
     let name = preceded(tag_ws("fn"), parse_identifier);
     let parameters = delimited(tag_ws("("), parse_param_list0, tag_ws(")"));
     let ret_type = preceded(tag_ws("->"), parse_identifier);
-    let mut p = tuple((name, parameters, ret_type));
-    p(input).map(|(remaining, (n, p, r))| {
-        (
-            remaining,
-            FunctionSignature {
-                name: n,
-                params: p,
-                ret_type: r,
-            },
-        )
+    let p = tuple((name, parameters, ret_type));
+    p.map(|(n, p, r)| FunctionSignature {
+        name: n,
+        params: p,
+        ret_type: r,
     })
+    .parse(input)
 }
 
 #[cfg(test)]
