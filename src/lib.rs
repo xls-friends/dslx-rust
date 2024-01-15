@@ -76,7 +76,7 @@ pub fn parse_identifier(input: &str) -> IResult<&str, Identifier> {
     ));
     let ws_p = preceding_whitespace(p);
     ws_p.map(|name| Identifier {
-        name: name.to_string(),
+        name: name.to_owned(),
     })
     .parse(input)
 }
@@ -85,11 +85,10 @@ pub fn parse_identifier(input: &str) -> IResult<&str, Identifier> {
 fn parse_param(input: &str) -> IResult<&str, Param> {
     let name = parse_identifier;
     let param_type = preceded(tag_ws(":"), parse_identifier);
-    let mut p = tuple((name, param_type)).map(|(name, param_type)| Param {
+    tuple((name, param_type)).map(|(name, param_type)| Param {
         name: name,
         param_type: param_type,
-    });
-    p.parse(input)
+    }).parse(input)
 }
 
 // Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
@@ -124,18 +123,18 @@ mod tests {
         let input = "fn add_1(x: u32) -> u32 { x + u32:1 }";
         let expected = FunctionSignature {
             name: Identifier {
-                name: "add_1".to_string(),
+                name: "add_1".to_owned(),
             },
             params: vec![Param {
                 name: Identifier {
-                    name: "x".to_string(),
+                    name: "x".to_owned(),
                 },
                 param_type: Identifier {
-                    name: "u32".to_string(),
+                    name: "u32".to_owned(),
                 },
             }],
             ret_type: Identifier {
-                name: "u32".to_string(),
+                name: "u32".to_owned(),
             },
         };
         assert_eq!(
