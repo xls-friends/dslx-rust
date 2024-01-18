@@ -1,7 +1,5 @@
 // [WIP] parser for the DSLX language. Currently a spooky scary skeleton, but improving.
 // Full language defined here: https://google.github.io/xls/dslx_reference/.
-// TODO: It'd sure be nice to not have to `eat_whitespace` after every scanning fn.
-//  - For now, tho, we consume leading whitespace in parsing fns (and not trailing).
 use nom::{
     branch::alt,
     bytes::streaming::{tag, take_till},
@@ -12,50 +10,28 @@ use nom::{
     IResult, Parser,
 };
 
-// AST nodes. Will be moved to their own file.
-// TODO: There's currently a lot of copying in the AST how it might be set up; switch
-// to single owner and reference holding once this is more fleshed out.
+pub mod ast;
 
-// Represents a name of an entity, such as a type, variable, function, ...
-#[derive(Debug, PartialEq)]
-pub struct Identifier {
-    name: String,
-}
+use ast::ParseInput;
 
-// A parameter to a function, e.g., `foo: MyType`.
-#[derive(Debug, PartialEq)]
-pub struct Param {
-    name: Identifier,
-    // Will be made a "TypeRef".
-    param_type: Identifier,
-}
-
-// A function!
-// fn foo(x:u32) -> u32 { ... }
-#[derive(Debug, PartialEq)]
-pub struct FunctionSignature {
-    name: Identifier,
-    params: Vec<Param>,
-    // Will be made a "TypeRef".
-    ret_type: Identifier,
-}
-
-// Consumes all whitespace at the head of `input` and return a reference to the remaining string.
-pub fn eat_whitespace(input: &str) -> Result<&str, nom::Err<nom::error::Error<&str>>> {
+// Consumes all whitespace at the head of `input` and returns a reference to the remaining string.
+pub fn eat_whitespace(
+    span: ParseInput,
+) -> Result<ParseInput, nom::Err<nom::error::Error<ParseInput>>> {
     // Using a lambda instead of the nom::character functions, as they're
     // ASCII-specific.
-    Ok(take_till(|c: char| !c.is_whitespace())(input)?.0)
+    Ok(take_till(|c: char| !c.is_whitespace())(span)?.0)
 }
 
 // Returns a parser that consumes preceding whitespace then runs the given parser.
 pub fn preceding_whitespace<'a, O, P>(
     mut parser: P,
-) -> impl FnMut(&'a str) -> IResult<&str, O, nom::error::Error<&'a str>>
+) -> impl FnMut(ParseInput<'a>) -> IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>
 where
-    P: nom::Parser<&'a str, O, nom::error::Error<&'a str>>,
+    P: nom::Parser<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>,
 {
-    move |input: &str| {
-        let remaining = eat_whitespace(input)?;
+    move |span: ParseInput<'a>| {
+        let remaining = eat_whitespace(span)?;
         parser.parse(remaining)
     }
 }
@@ -63,53 +39,83 @@ where
 // Returns a "tag" parser that removes any preceding whitespace.
 pub fn tag_ws<'a>(
     to_match: &'a str,
-) -> impl FnMut(&'a str) -> IResult<&'a str, &str, nom::error::Error<&'a str>> {
+) -> impl FnMut(
+    ParseInput<'a>,
+) -> IResult<ParseInput<'a>, ParseInput<'a>, nom::error::Error<ParseInput<'a>>> {
     preceding_whitespace(tag(to_match))
 }
 
+// Gets the current position after consuming present whitespace.
+pub fn position_ws<'a>() -> impl FnMut(
+    ParseInput<'a>,
+) -> IResult<
+    ParseInput<'a>,
+    ParseInput<'a>,
+    nom::error::Error<ParseInput<'a>>,
+> {
+    preceding_whitespace(nom_locate::position)
+}
+
 // Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
-// TODO: Use something aside from `alpha1`, etc., to support non-ASCII.
-pub fn parse_identifier(input: &str) -> IResult<&str, Identifier> {
-    let p = recognize(pair(
-        alt((alpha1, tag("_"))),
-        many0_count(alt((alphanumeric1, tag("_")))),
+pub fn parse_identifier(input: ParseInput) -> IResult<ParseInput, ast::Identifier> {
+    let p = tuple((
+        position_ws(),
+        recognize(pair(
+            alt((alpha1, tag("_"))),
+            many0_count(alt((alphanumeric1, tag("_")))),
+        )),
+        nom_locate::position,
     ));
     let ws_p = preceding_whitespace(p);
-    ws_p.map(|name| Identifier {
-        name: name.to_owned(),
+    ws_p.map(|(start, name, end)| ast::Identifier {
+        span: ast::Span::from_parse_input(start, end),
+        name: name.fragment(),
     })
     .parse(input)
 }
 
 // Parses a single param, e.g., `x: u32`.
-fn parse_param(input: &str) -> IResult<&str, Param> {
-    let name = parse_identifier;
-    let param_type = preceded(tag_ws(":"), parse_identifier);
-    tuple((name, param_type)).map(|(name, param_type)| Param {
+fn parse_param(input: ParseInput) -> IResult<ParseInput, ast::Param> {
+    let p = tuple((
+        position_ws(),
+        parse_identifier,
+        preceded(tag_ws(":"), parse_identifier),
+        nom_locate::position,
+    ));
+    p.map(|(start, name, param_type, end)| ast::Param {
+        span: ast::Span::from_parse_input(start, end),
         name: name,
         param_type: param_type,
-    }).parse(input)
+    })
+    .parse(input)
 }
 
 // Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
 // Note that the list must _not_ end with a comma.
-fn parse_param_list0(input: &str) -> IResult<&str, Vec<Param>> {
-    separated_list0(preceding_whitespace(tag(",")), parse_param)(input)
+fn parse_param_list0(input: ParseInput) -> IResult<ParseInput, Vec<ast::Param>> {
+    separated_list0(tag_ws(","), parse_param)(input)
 }
 
 // Parses a function signature, e.g.:
 // `fn foo(a: u32, b: u64) -> uN[128]`
-fn parse_function_signature(input: &str) -> IResult<&str, FunctionSignature> {
+fn parse_function_signature(span: ParseInput) -> IResult<ParseInput, ast::FunctionSignature> {
     let name = preceded(tag_ws("fn"), parse_identifier);
     let parameters = delimited(tag_ws("("), parse_param_list0, tag_ws(")"));
     let ret_type = preceded(tag_ws("->"), parse_identifier);
-    let p = tuple((name, parameters, ret_type));
-    p.map(|(n, p, r)| FunctionSignature {
+    let p = tuple((
+        nom_locate::position,
+        name,
+        parameters,
+        ret_type,
+        nom_locate::position,
+    ));
+    p.map(|(start_pos, n, p, r, end_pos)| ast::FunctionSignature {
+        span: ast::Span::from_parse_input(start_pos, end_pos),
         name: n,
         params: p,
         ret_type: r,
     })
-    .parse(input)
+    .parse(span)
 }
 
 #[cfg(test)]
@@ -119,27 +125,35 @@ mod tests {
     // Decent first stopping spot: can we parse a function signature?
     // TODO: Parse the rest of the fn.
     #[test]
-    fn parse_fn_signature() {
-        let input = "fn add_1(x: u32) -> u32 { x + u32:1 }";
-        let expected = FunctionSignature {
-            name: Identifier {
-                name: "add_1".to_owned(),
+    fn parse_fn_signature() -> Result<(), String> {
+        let input = ParseInput::new("fn add_1(x: u32) -> u32 { x + u32:1 }");
+        let expected = ast::FunctionSignature {
+            span: ast::Span::from_values((0, 1, 1), (23, 1, 24)),
+            name: ast::Identifier {
+                span: ast::Span::from_values((3, 1, 4), (8, 1, 9)),
+                name: "add_1",
             },
-            params: vec![Param {
-                name: Identifier {
-                    name: "x".to_owned(),
+            params: vec![ast::Param {
+                span: ast::Span::from_values((9, 1, 10), (15, 1, 16)),
+                name: ast::Identifier {
+                    span: ast::Span::from_values((9, 1, 10), (10, 1, 11)),
+                    name: "x",
                 },
-                param_type: Identifier {
-                    name: "u32".to_owned(),
+                param_type: ast::Identifier {
+                    span: ast::Span::from_values((12, 1, 13), (15, 1, 16)),
+                    name: "u32",
                 },
             }],
-            ret_type: Identifier {
-                name: "u32".to_owned(),
+            ret_type: ast::Identifier {
+                span: ast::Span::from_values((20, 1, 21), (23, 1, 24)),
+                name: "u32",
             },
         };
-        assert_eq!(
-            parse_function_signature(&input),
-            Ok((" { x + u32:1 }", expected))
-        )
+        let parsed = match parse_function_signature(input) {
+            Ok(foo) => foo.1,
+            Err(bar) => return Err(bar.to_string()),
+        };
+        assert_eq!(parsed, expected);
+        Ok(())
     }
 }
