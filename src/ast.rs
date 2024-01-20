@@ -1,17 +1,21 @@
 // Defines the types in the AST for DSLX.
 pub type ParseInput<'a> = nom_locate::LocatedSpan<&'a str>;
 
-// TODO: Move to own file.
-// A distinct position in the input: offset from input start, line number, and column within line.
+// TODO: Move pos/span to own file.
+/// A distinct position in the input: offset from input start, line number, and column within line.
 #[derive(Debug, PartialEq)]
 pub struct Pos {
+    /// Offset from the start of overall parse input in bytes/characters.
+    /// Unicode is not _currently_ supported.
     pub input_offset: usize,
+    /// 1-indexed line number from parse input.
     pub line: usize,
+    /// 1-indexed column number in the current line.
     pub column: usize,
 }
 
 impl Pos {
-    pub fn from_parse_input(x: ParseInput) -> Pos {
+    pub fn new(x: ParseInput) -> Pos {
         Pos {
             input_offset: x.location_offset(),
             line: x.location_line() as usize,
@@ -28,18 +32,22 @@ impl Pos {
     }
 }
 
-// An inclusive range of the input.
+/// An inclusive range of the input.
 #[derive(Debug, PartialEq)]
 pub struct Span {
     pub start: Pos,
+    /// Not inclusive, i.e., this represents the first position after the end of the spanned region.
+    // TODO: This is inelegant; make this inclusive (not completely trivial, since it might
+    // require "backing up" a line & newline handling, ... Not horribly hard, either, just adequate
+    // for its own change).
     pub end: Pos,
 }
 
 impl Span {
-    pub fn from_parse_input(start: ParseInput, end: ParseInput) -> Span {
+    pub fn new(start: ParseInput, end: ParseInput) -> Span {
         Span {
-            start: Pos::from_parse_input(start),
-            end: Pos::from_parse_input(end),
+            start: Pos::new(start),
+            end: Pos::new(end),
         }
     }
 
@@ -51,14 +59,14 @@ impl Span {
     }
 }
 
-// Represents a name of an entity, such as a type, variable, function, ...
+/// Represents a name of an entity, such as a type, variable, function, ...
 #[derive(Debug, PartialEq)]
 pub struct Identifier<'a> {
     pub span: Span,
     pub name: &'a str,
 }
 
-// A parameter to a function, e.g., `foo: MyType`.
+/// A parameter to a function, e.g., `foo: MyType`.
 #[derive(Debug, PartialEq)]
 pub struct Param<'a> {
     pub span: Span,
@@ -66,7 +74,7 @@ pub struct Param<'a> {
     pub param_type: Identifier<'a>,
 }
 
-// A function signature, e.g: `fn foo(x:u32) -> u32`.
+/// A function signature, e.g: `fn foo(x:u32) -> u32`.
 #[derive(Debug, PartialEq)]
 pub struct FunctionSignature<'a> {
     pub span: Span,

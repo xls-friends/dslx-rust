@@ -1,5 +1,9 @@
-// [WIP] parser for the DSLX language. Currently a spooky scary skeleton, but improving.
-// Full language defined here: https://google.github.io/xls/dslx_reference/.
+//! [WIP] parser for the DSLX language.
+//!
+//! Full language defined here: https://google.github.io/xls/dslx_reference/.
+//! Currently a spooky scary skeleton, but actively being built out.
+//!
+//! At present, the [only] entry point is `parse_function_signature`, taking in an ast::ParseInput.
 use nom::{
     branch::alt,
     bytes::streaming::{tag, take_till},
@@ -14,7 +18,7 @@ pub mod ast;
 
 use ast::ParseInput;
 
-// Consumes all whitespace at the head of `input` and returns a reference to the remaining string.
+/// Consumes all whitespace at the head of `input` and returns a reference to the remaining string.
 pub fn eat_whitespace(
     span: ParseInput,
 ) -> Result<ParseInput, nom::Err<nom::error::Error<ParseInput>>> {
@@ -23,20 +27,20 @@ pub fn eat_whitespace(
     Ok(take_till(|c: char| !c.is_whitespace())(span)?.0)
 }
 
-// Returns a parser that consumes preceding whitespace then runs the given parser.
+/// Returns a parser that consumes preceding whitespace then runs the given parser.
 pub fn preceding_whitespace<'a, O, P>(
     mut parser: P,
 ) -> impl FnMut(ParseInput<'a>) -> IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>
 where
     P: nom::Parser<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>,
 {
-    move |span: ParseInput<'a>| {
-        let remaining = eat_whitespace(span)?;
+    move |input: ParseInput<'a>| {
+        let remaining = eat_whitespace(input)?;
         parser.parse(remaining)
     }
 }
 
-// Returns a "tag" parser that removes any preceding whitespace.
+/// Returns a "tag" parser that removes any preceding whitespace.
 pub fn tag_ws<'a>(
     to_match: &'a str,
 ) -> impl FnMut(
@@ -45,7 +49,7 @@ pub fn tag_ws<'a>(
     preceding_whitespace(tag(to_match))
 }
 
-// Gets the current position after consuming present whitespace.
+/// Gets the current position after consuming present whitespace.
 pub fn position_ws<'a>() -> impl FnMut(
     ParseInput<'a>,
 ) -> IResult<
@@ -56,61 +60,75 @@ pub fn position_ws<'a>() -> impl FnMut(
     preceding_whitespace(nom_locate::position)
 }
 
-// Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
-pub fn parse_identifier(input: ParseInput) -> IResult<ParseInput, ast::Identifier> {
-    let p = tuple((
-        position_ws(),
-        recognize(pair(
-            alt((alpha1, tag("_"))),
-            many0_count(alt((alphanumeric1, tag("_")))),
-        )),
-        nom_locate::position,
-    ));
-    let ws_p = preceding_whitespace(p);
-    ws_p.map(|(start, name, end)| ast::Identifier {
-        span: ast::Span::from_parse_input(start, end),
-        name: name.fragment(),
-    })
-    .parse(input)
+/// Returns a parser that captures the span encompassing the entirety of the specified parser's
+/// matched region, ignoring any preceding whitespace.
+pub fn spanned<'a, O, P>(
+    mut parser: P,
+) -> impl FnMut(
+    ParseInput<'a>,
+) -> IResult<ParseInput<'a>, (O, ast::Span), nom::error::Error<ParseInput<'a>>>
+where
+    P: nom::Parser<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>,
+{
+    move |input: ParseInput<'a>| {
+        /* What I want but don't know how to have:
+        let p = tuple((position_ws(), move |input| { parser.parse(input) }, nom_locate::position));
+        p.map(move |(start, stuff, end)| {
+            (stuff, ast::Span::new(start, end))
+        }).parse(input)
+        */
+        // Lame substitute
+        let (x, start) = position_ws().parse(input)?;
+        let (y, stuff) = parser.parse(x)?;
+        let (z, end) = nom_locate::position.parse(y)?;
+        Ok((z, (stuff, ast::Span::new(start, end))))
+    }
 }
 
-// Parses a single param, e.g., `x: u32`.
+/// Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
+pub fn parse_identifier(input: ParseInput) -> IResult<ParseInput, ast::Identifier> {
+    let p = recognize(pair(
+        alt((alpha1, tag("_"))),
+        many0_count(alt((alphanumeric1, tag("_")))),
+    ));
+    let spanned_p = spanned(p);
+    spanned_p
+        .map(|(name, span)| ast::Identifier {
+            span: span,
+            name: name.fragment(),
+        })
+        .parse(input)
+}
+
+/// Parses a single param, e.g., `x: u32`.
 fn parse_param(input: ParseInput) -> IResult<ParseInput, ast::Param> {
-    let p = tuple((
-        position_ws(),
+    let p = spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
-        nom_locate::position,
-    ));
-    p.map(|(start, name, param_type, end)| ast::Param {
-        span: ast::Span::from_parse_input(start, end),
+    )));
+    p.map(|((name, param_type), span)| ast::Param {
+        span: span,
         name: name,
         param_type: param_type,
     })
     .parse(input)
 }
 
-// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
-// Note that the list must _not_ end with a comma.
+/// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
+/// Note that the list must _not_ end with a comma.
 fn parse_param_list0(input: ParseInput) -> IResult<ParseInput, Vec<ast::Param>> {
     separated_list0(tag_ws(","), parse_param)(input)
 }
 
-// Parses a function signature, e.g.:
-// `fn foo(a: u32, b: u64) -> uN[128]`
+/// Parses a function signature, e.g.:
+/// `fn foo(a: u32, b: u64) -> uN[128]`
 fn parse_function_signature(span: ParseInput) -> IResult<ParseInput, ast::FunctionSignature> {
     let name = preceded(tag_ws("fn"), parse_identifier);
     let parameters = delimited(tag_ws("("), parse_param_list0, tag_ws(")"));
     let ret_type = preceded(tag_ws("->"), parse_identifier);
-    let p = tuple((
-        nom_locate::position,
-        name,
-        parameters,
-        ret_type,
-        nom_locate::position,
-    ));
-    p.map(|(start_pos, n, p, r, end_pos)| ast::FunctionSignature {
-        span: ast::Span::from_parse_input(start_pos, end_pos),
+    let p = spanned(tuple((name, parameters, ret_type)));
+    p.map(|((n, p, r), span)| ast::FunctionSignature {
+        span: span,
         name: n,
         params: p,
         ret_type: r,
