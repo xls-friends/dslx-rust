@@ -1,3 +1,5 @@
+use nom_locate::LocatedSpan;
+
 // Defines the types in the AST for DSLX.
 pub type ParseInput<'a> = nom_locate::LocatedSpan<&'a str>;
 
@@ -70,12 +72,64 @@ pub struct Identifier<'a> {
     pub name: &'a str,
 }
 
+/// A parser result and the corresponding Span in the source text.
+#[derive(Debug, PartialEq)]
+pub struct Spanned<Thing> {
+    pub span: Span,
+    pub thing: Thing,
+}
+
+/// Creates a Spanned<Thing> from the tuple (start of thing, ParserResult, end of thing), when
+/// `from` exists for ParserResult -> Thing.
+impl<ParserResult, Thing> From<(LocatedSpan<&str>, ParserResult, LocatedSpan<&str>)>
+    for Spanned<Thing>
+where
+    Thing: From<ParserResult>,
+{
+    fn from(
+        (start, parser_result, end): (LocatedSpan<&str>, ParserResult, LocatedSpan<&str>),
+    ) -> Self {
+        Spanned {
+            span: Span::new(start, end),
+            thing: Thing::from(parser_result),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Identifier2<'a> {
+    pub name: &'a str,
+}
+
+impl<'a> From<LocatedSpan<&'a str>> for Identifier2<'a> {
+    fn from(span: LocatedSpan<&'a str>) -> Self {
+        Identifier2 {
+            name: span.fragment(),
+        }
+    }
+}
+
+impl<'a> From<(Spanned<Identifier2<'a>>, Spanned<Identifier2<'a>>)> for Param2<'a> {
+    fn from((name, param_type): (Spanned<Identifier2<'a>>, Spanned<Identifier2<'a>>)) -> Self {
+        Param2 { name, param_type }
+    }
+}
+
+pub type IdentifierSpanned<'a> = Spanned<Identifier2<'a>>;
+pub type ParamSpanned<'a> = Spanned<Param2<'a>>;
+
 /// A parameter to a function, e.g., `foo: MyType`.
 #[derive(Debug, PartialEq)]
 pub struct Param<'a> {
     pub span: Span,
     pub name: Identifier<'a>,
     pub param_type: Identifier<'a>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Param2<'a> {
+    pub name: IdentifierSpanned<'a>,
+    pub param_type: IdentifierSpanned<'a>,
 }
 
 /// A function signature, e.g: `fn foo(x:u32) -> u32`.

@@ -17,6 +17,7 @@ use nom::{
 pub mod ast;
 
 use ast::ParseInput;
+use ast::Spanned;
 
 // Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -51,6 +52,27 @@ where
     )
 }
 
+/// Returns a parser that captures the span encompassing the entirety of the given parser's
+/// matched region, ignoring any preceding whitespace. Also converts (using
+/// `Spanned::<Final>::from`) from the parser's intermediate result (`Intermediate`) to the
+/// desired result type (`Final`).
+///
+/// Intermediate: the type produced by `parser`. E.g. for Identifier, this is a LocatedSpan.
+///
+/// Final: the type held inside the returned `Spanned`.
+pub fn spanned2<'a, Intermediate, Final, P>(
+    parser: P,
+) -> impl FnMut(ParseInput<'a>) -> ParseResult<Spanned<Final>>
+where
+    P: nom::Parser<ParseInput<'a>, Intermediate, nom::error::Error<ParseInput<'a>>>,
+    Final: From<Intermediate>,
+{
+    nom::combinator::map(
+        tuple((position_ws(), parser, nom_locate::position)),
+        Spanned::<Final>::from,
+    )
+}
+
 /// Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
 pub fn parse_identifier(input: ParseInput) -> ParseResult<ast::Identifier> {
     let p = recognize(pair(
@@ -65,6 +87,14 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<ast::Identifier> {
         .parse(input)
 }
 
+pub fn parse_identifier3(input: ParseInput) -> ParseResult<ast::IdentifierSpanned> {
+    let p = recognize(pair(
+        alt((alpha1, tag("_"))),
+        many0_count(alt((alphanumeric1, tag("_")))),
+    ));
+    spanned2(p).parse(input)
+}
+
 /// Parses a single param, e.g., `x: u32`.
 fn parse_param(input: ParseInput) -> ParseResult<ast::Param> {
     let p = spanned(tuple((
@@ -76,6 +106,14 @@ fn parse_param(input: ParseInput) -> ParseResult<ast::Param> {
         name: name,
         param_type: param_type,
     })
+    .parse(input)
+}
+
+fn parse_param3(input: ParseInput) -> ParseResult<ast::ParamSpanned> {
+    spanned2(tuple((
+        parse_identifier3,
+        preceded(tag_ws(":"), parse_identifier3),
+    )))
     .parse(input)
 }
 
