@@ -32,6 +32,16 @@ impl Pos {
     }
 }
 
+impl From<(usize, usize, usize)> for Pos {
+    fn from(item: (usize, usize, usize)) -> Self {
+        Pos {
+            input_offset: item.0,
+            line: item.1,
+            column: item.2,
+        }
+    }
+}
+
 /// An inclusive range of the input.
 #[derive(Debug, PartialEq)]
 pub struct Span {
@@ -55,6 +65,15 @@ impl Span {
         Span {
             start: Pos::from_values(start.0, start.1, start.2),
             end: Pos::from_values(end.0, end.1, end.2),
+        }
+    }
+}
+
+impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
+    fn from(item: ((usize, usize, usize), (usize, usize, usize))) -> Self {
+        Span {
+            start: Pos::from(item.0),
+            end: Pos::from(item.1),
         }
     }
 }

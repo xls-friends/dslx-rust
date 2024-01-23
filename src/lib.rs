@@ -18,81 +18,46 @@ pub mod ast;
 
 use ast::ParseInput;
 
-/// Consumes all whitespace at the head of `input` and returns a reference to the remaining string.
-pub fn eat_whitespace(
-    span: ParseInput,
-) -> Result<ParseInput, nom::Err<nom::error::Error<ParseInput>>> {
-    // Using a lambda instead of the nom::character functions, as they're
-    // ASCII-specific.
-    Ok(take_till(|c: char| !c.is_whitespace())(span)?.0)
-}
+// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
+type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
 
 /// Returns a parser that consumes preceding whitespace then runs the given parser.
-pub fn preceding_whitespace<'a, O, P>(
-    mut parser: P,
-) -> impl FnMut(ParseInput<'a>) -> IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>
+pub fn preceding_whitespace<'a, O, P>(parser: P) -> impl FnMut(ParseInput<'a>) -> ParseResult<O>
 where
     P: nom::Parser<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>,
 {
-    move |input: ParseInput<'a>| {
-        let remaining = eat_whitespace(input)?;
-        parser.parse(remaining)
-    }
+    preceded(take_till(|c: char| !c.is_whitespace()), parser)
 }
 
 /// Returns a "tag" parser that removes any preceding whitespace.
-pub fn tag_ws<'a>(
-    to_match: &'a str,
-) -> impl FnMut(
-    ParseInput<'a>,
-) -> IResult<ParseInput<'a>, ParseInput<'a>, nom::error::Error<ParseInput<'a>>> {
+pub fn tag_ws<'a>(to_match: &'a str) -> impl FnMut(ParseInput<'a>) -> ParseResult<ParseInput<'a>> {
     preceding_whitespace(tag(to_match))
 }
 
 /// Gets the current position after consuming present whitespace.
-pub fn position_ws<'a>() -> impl FnMut(
-    ParseInput<'a>,
-) -> IResult<
-    ParseInput<'a>,
-    ParseInput<'a>,
-    nom::error::Error<ParseInput<'a>>,
-> {
+pub fn position_ws<'a>() -> impl FnMut(ParseInput<'a>) -> ParseResult<ParseInput<'a>> {
     preceding_whitespace(nom_locate::position)
 }
 
 /// Returns a parser that captures the span encompassing the entirety of the specified parser's
 /// matched region, ignoring any preceding whitespace.
-pub fn spanned<'a, O, P>(
-    mut parser: P,
-) -> impl FnMut(
-    ParseInput<'a>,
-) -> IResult<ParseInput<'a>, (O, ast::Span), nom::error::Error<ParseInput<'a>>>
+pub fn spanned<'a, O, P>(parser: P) -> impl FnMut(ParseInput<'a>) -> ParseResult<(O, ast::Span)>
 where
     P: nom::Parser<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>,
 {
-    move |input: ParseInput<'a>| {
-        /* What I want but don't know how to have:
-        let p = tuple((position_ws(), move |input| { parser.parse(input) }, nom_locate::position));
-        p.map(move |(start, stuff, end)| {
-            (stuff, ast::Span::new(start, end))
-        }).parse(input)
-        */
-        // Lame substitute
-        let (x, start) = position_ws().parse(input)?;
-        let (y, stuff) = parser.parse(x)?;
-        let (z, end) = nom_locate::position.parse(y)?;
-        Ok((z, (stuff, ast::Span::new(start, end))))
-    }
+    nom::combinator::map(
+        tuple((position_ws(), parser, nom_locate::position)),
+        |(start, stuff, end)| (stuff, ast::Span::new(start, end)),
+    )
 }
 
 /// Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
-pub fn parse_identifier(input: ParseInput) -> IResult<ParseInput, ast::Identifier> {
+pub fn parse_identifier(input: ParseInput) -> ParseResult<ast::Identifier> {
     let p = recognize(pair(
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
     ));
-    let spanned_p = spanned(p);
-    spanned_p
+    spanned(p)
         .map(|(name, span)| ast::Identifier {
             span: span,
             name: name.fragment(),
@@ -101,7 +66,7 @@ pub fn parse_identifier(input: ParseInput) -> IResult<ParseInput, ast::Identifie
 }
 
 /// Parses a single param, e.g., `x: u32`.
-fn parse_param(input: ParseInput) -> IResult<ParseInput, ast::Param> {
+fn parse_param(input: ParseInput) -> ParseResult<ast::Param> {
     let p = spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -116,13 +81,13 @@ fn parse_param(input: ParseInput) -> IResult<ParseInput, ast::Param> {
 
 /// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
 /// Note that the list must _not_ end with a comma.
-fn parse_param_list0(input: ParseInput) -> IResult<ParseInput, Vec<ast::Param>> {
+fn parse_param_list0(input: ParseInput) -> ParseResult<Vec<ast::Param>> {
     separated_list0(tag_ws(","), parse_param)(input)
 }
 
 /// Parses a function signature, e.g.:
 /// `fn foo(a: u32, b: u64) -> uN[128]`
-fn parse_function_signature(span: ParseInput) -> IResult<ParseInput, ast::FunctionSignature> {
+fn parse_function_signature(span: ParseInput) -> ParseResult<ast::FunctionSignature> {
     let name = preceded(tag_ws("fn"), parse_identifier);
     let parameters = delimited(tag_ws("("), parse_param_list0, tag_ws(")"));
     let ret_type = preceded(tag_ws("->"), parse_identifier);
@@ -146,24 +111,24 @@ mod tests {
     fn parse_fn_signature() -> Result<(), String> {
         let input = ParseInput::new("fn add_1(x: u32) -> u32 { x + u32:1 }");
         let expected = ast::FunctionSignature {
-            span: ast::Span::from_values((0, 1, 1), (23, 1, 24)),
+            span: ast::Span::from(((0, 1, 1), (23, 1, 24))),
             name: ast::Identifier {
-                span: ast::Span::from_values((3, 1, 4), (8, 1, 9)),
+                span: ast::Span::from(((3, 1, 4), (8, 1, 9))),
                 name: "add_1",
             },
             params: vec![ast::Param {
-                span: ast::Span::from_values((9, 1, 10), (15, 1, 16)),
+                span: ast::Span::from(((9, 1, 10), (15, 1, 16))),
                 name: ast::Identifier {
-                    span: ast::Span::from_values((9, 1, 10), (10, 1, 11)),
+                    span: ast::Span::from(((9, 1, 10), (10, 1, 11))),
                     name: "x",
                 },
                 param_type: ast::Identifier {
-                    span: ast::Span::from_values((12, 1, 13), (15, 1, 16)),
+                    span: ast::Span::from(((12, 1, 13), (15, 1, 16))),
                     name: "u32",
                 },
             }],
             ret_type: ast::Identifier {
-                span: ast::Span::from_values((20, 1, 21), (23, 1, 24)),
+                span: ast::Span::from(((20, 1, 21), (23, 1, 24))),
                 name: "u32",
             },
         };
