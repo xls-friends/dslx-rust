@@ -79,23 +79,6 @@ pub struct Spanned<Thing> {
     pub thing: Thing,
 }
 
-/// Creates a Spanned<Thing> from the tuple (start of thing, ParserResult, end of thing), when
-/// `from` exists for ParserResult -> Thing.
-impl<ParserResult, Thing> From<(LocatedSpan<&str>, ParserResult, LocatedSpan<&str>)>
-    for Spanned<Thing>
-where
-    Thing: From<ParserResult>,
-{
-    fn from(
-        (start, parser_result, end): (LocatedSpan<&str>, ParserResult, LocatedSpan<&str>),
-    ) -> Self {
-        Spanned {
-            span: Span::new(start, end),
-            thing: Thing::from(parser_result),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub struct Identifier2<'a> {
     pub name: &'a str,

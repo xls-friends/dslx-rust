@@ -16,8 +16,8 @@ use nom::{
 
 pub mod ast;
 
-use ast::ParseInput;
 use ast::Spanned;
+use ast::{ParseInput, Span};
 
 // Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -60,7 +60,7 @@ where
 /// Intermediate: the type produced by `parser`. E.g. for Identifier, this is a LocatedSpan.
 ///
 /// Final: the type held inside the returned `Spanned`.
-pub fn spanned2<'a, Intermediate, Final, P>(
+pub fn spanned3<'a, Intermediate, Final, P>(
     parser: P,
 ) -> impl FnMut(ParseInput<'a>) -> ParseResult<Spanned<Final>>
 where
@@ -69,7 +69,10 @@ where
 {
     nom::combinator::map(
         tuple((position_ws(), parser, nom_locate::position)),
-        Spanned::<Final>::from,
+        |(start, parser_result, end)| Spanned {
+            span: Span::new(start, end),
+            thing: Final::from(parser_result),
+        },
     )
 }
 
@@ -92,7 +95,7 @@ pub fn parse_identifier3(input: ParseInput) -> ParseResult<ast::IdentifierSpanne
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
     ));
-    spanned2(p).parse(input)
+    spanned3(p).parse(input)
 }
 
 /// Parses a single param, e.g., `x: u32`.
@@ -110,7 +113,7 @@ fn parse_param(input: ParseInput) -> ParseResult<ast::Param> {
 }
 
 fn parse_param3(input: ParseInput) -> ParseResult<ast::ParamSpanned> {
-    spanned2(tuple((
+    spanned3(tuple((
         parse_identifier3,
         preceded(tag_ws(":"), parse_identifier3),
     )))
