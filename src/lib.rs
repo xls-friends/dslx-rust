@@ -80,7 +80,7 @@ fn parse_param(input: ParseInput) -> ParseResult<ast::Param> {
 }
 
 /// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
-/// Note that the list must _not_ end with a comma.
+/// Note that a trailing comma will not be matched or consumed by this function.
 fn parse_param_list0(input: ParseInput) -> ParseResult<Vec<ast::Param>> {
     separated_list0(tag_ws(","), parse_param)(input)
 }

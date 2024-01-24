@@ -22,14 +22,6 @@ impl Pos {
             column: x.get_column(),
         }
     }
-
-    pub fn from_values(offset: usize, line: usize, column: usize) -> Pos {
-        Pos {
-            input_offset: offset,
-            line: line,
-            column: column,
-        }
-    }
 }
 
 impl From<(usize, usize, usize)> for Pos {
@@ -42,12 +34,12 @@ impl From<(usize, usize, usize)> for Pos {
     }
 }
 
-/// An inclusive range of the input.
+/// Identifies a range of the parser input.
 #[derive(Debug, PartialEq)]
 pub struct Span {
     pub start: Pos,
     /// Not inclusive, i.e., this represents the first position after the end of the spanned region.
-    // TODO: This is inelegant; make this inclusive (not completely trivial, since it might
+    // TODO: Make this inclusive (not completely trivial, since it might
     // require "backing up" a line & newline handling, ... Not horribly hard, either, just adequate
     // for its own change).
     pub end: Pos,
@@ -58,13 +50,6 @@ impl Span {
         Span {
             start: Pos::new(start),
             end: Pos::new(end),
-        }
-    }
-
-    pub fn from_values(start: (usize, usize, usize), end: (usize, usize, usize)) -> Span {
-        Span {
-            start: Pos::from_values(start.0, start.1, start.2),
-            end: Pos::from_values(end.0, end.1, end.2),
         }
     }
 }
