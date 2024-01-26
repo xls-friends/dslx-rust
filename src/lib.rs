@@ -107,7 +107,7 @@ mod tests {
 
     // TODO: Parse the rest of the fn.
     #[test]
-    fn parse_fn_signature() -> () {
+    fn test_parse_fn_signature() -> () {
         // FIXME this fails if I delete the trailing space (i.e. u16" fails).
         let input = ParseInput::new("fn add_1(x: u32) -> u16 ");
         let expected = FunctionSignature {
