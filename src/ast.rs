@@ -65,61 +65,70 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
     }
 }
 
-/// Represents a name of an entity, such as a type, variable, function, ...
+/// Represents a name of an entity, such as a type, variable, function, etc.
 #[derive(Debug, PartialEq)]
 pub struct Identifier<'a> {
-    pub span: Span,
     pub name: &'a str,
 }
 
-/// A parser result and the corresponding Span in the source text.
+impl<'a> From<LocatedSpan<&'a str>> for Identifier<'a> {
+    fn from(span: LocatedSpan<&'a str>) -> Self {
+        Identifier {
+            name: span.fragment(),
+        }
+    }
+}
+
+/// A parameter to a function, e.g., `foo: MyType`.
+#[derive(Debug, PartialEq)]
+pub struct Param<'a> {
+    pub name: IdentifierSpanned<'a>,
+    pub param_type: IdentifierSpanned<'a>,
+}
+
+impl<'a> From<(Spanned<Identifier<'a>>, Spanned<Identifier<'a>>)> for Param<'a> {
+    fn from((name, param_type): (Spanned<Identifier<'a>>, Spanned<Identifier<'a>>)) -> Self {
+        Param { name, param_type }
+    }
+}
+
+/// A function signature, e.g: `fn foo(x:u32) -> u32`.
+#[derive(Debug, PartialEq)]
+pub struct FunctionSignature<'a> {
+    pub name: IdentifierSpanned<'a>,
+    pub parameters: Vec<ParamSpanned<'a>>,
+    pub result_type: IdentifierSpanned<'a>,
+}
+
+impl<'a>
+    From<(
+        Spanned<Identifier<'a>>,
+        Vec<Spanned<Param<'a>>>,
+        Spanned<Identifier<'a>>,
+    )> for FunctionSignature<'a>
+{
+    fn from(
+        (name, parameters, result_type): (
+            Spanned<Identifier<'a>>,
+            Vec<Spanned<Param<'a>>>,
+            Spanned<Identifier<'a>>,
+        ),
+    ) -> Self {
+        FunctionSignature {
+            name,
+            parameters,
+            result_type,
+        }
+    }
+}
+
+/// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
 #[derive(Debug, PartialEq)]
 pub struct Spanned<Thing> {
     pub span: Span,
     pub thing: Thing,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct Identifier2<'a> {
-    pub name: &'a str,
-}
-
-impl<'a> From<LocatedSpan<&'a str>> for Identifier2<'a> {
-    fn from(span: LocatedSpan<&'a str>) -> Self {
-        Identifier2 {
-            name: span.fragment(),
-        }
-    }
-}
-
-impl<'a> From<(Spanned<Identifier2<'a>>, Spanned<Identifier2<'a>>)> for Param2<'a> {
-    fn from((name, param_type): (Spanned<Identifier2<'a>>, Spanned<Identifier2<'a>>)) -> Self {
-        Param2 { name, param_type }
-    }
-}
-
-pub type IdentifierSpanned<'a> = Spanned<Identifier2<'a>>;
-pub type ParamSpanned<'a> = Spanned<Param2<'a>>;
-
-/// A parameter to a function, e.g., `foo: MyType`.
-#[derive(Debug, PartialEq)]
-pub struct Param<'a> {
-    pub span: Span,
-    pub name: Identifier<'a>,
-    pub param_type: Identifier<'a>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Param2<'a> {
-    pub name: IdentifierSpanned<'a>,
-    pub param_type: IdentifierSpanned<'a>,
-}
-
-/// A function signature, e.g: `fn foo(x:u32) -> u32`.
-#[derive(Debug, PartialEq)]
-pub struct FunctionSignature<'a> {
-    pub span: Span,
-    pub name: Identifier<'a>,
-    pub params: Vec<Param<'a>>,
-    pub ret_type: Identifier<'a>,
-}
+pub type IdentifierSpanned<'a> = Spanned<Identifier<'a>>;
+pub type ParamSpanned<'a> = Spanned<Param<'a>>;
+pub type FunctionSignatureSpanned<'a> = Spanned<FunctionSignature<'a>>;
