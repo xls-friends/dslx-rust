@@ -158,18 +158,7 @@ mod tests {
                 (
                     unsafe { LocatedSpan::new_from_raw_offset(10, 1, "! ", (),) },
                     Spanned {
-                        span: Span {
-                            start: Pos {
-                                input_offset: 1,
-                                line: 1,
-                                column: 2
-                            },
-                            end: Pos {
-                                input_offset: 10,
-                                line: 1,
-                                column: 11
-                            }
-                        },
+                        span: Span::from(((1, 1, 2), (10, 1, 11))),
                         thing: RawIdentifier { name: "_foo23Bar" }
                     }
                 ),
@@ -181,11 +170,9 @@ mod tests {
         };
     }
 
-    // FIXME
-    //Error: Parsing requires 1 bytes/chars
     #[test]
-    fn test_parse_identifier2() -> () {
-        let parsed = match parse_identifier(ParseInput::new("_foo23Bar")) {
+    fn test_parse_param() -> () {
+        let p = match parse_param(ParseInput::new(" x : u2 ")) {
             Ok(x) => x.1,
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -193,10 +180,19 @@ mod tests {
             }
         };
         assert_eq!(
-            parsed,
-            Identifier {
-                span: todo!(),
-                thing: todo!()
+            p,
+            Spanned {
+                span: Span::from(((1, 1, 2), (7, 1, 8))),
+                thing: RawParameter {
+                    name: Spanned {
+                        span: Span::from(((1, 1, 2), (2, 1, 3))),
+                        thing: RawIdentifier { name: "x" }
+                    },
+                    param_type: Spanned {
+                        span: Span::from(((5, 1, 6), (7, 1, 8))),
+                        thing: RawIdentifier { name: "u2" }
+                    }
+                }
             }
         );
     }
