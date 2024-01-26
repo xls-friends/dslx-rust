@@ -101,9 +101,49 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 
 #[cfg(test)]
 mod tests {
+    use nom_locate::LocatedSpan;
+
     use crate::ast::{Parameter, RawFunctionSignature, RawIdentifier, RawParameter};
 
     use super::*;
+
+    #[test]
+    fn test_consumes_ws() -> () {
+        let parsed = match tag_ws("a").parse(ParseInput::new("a")) {
+            Ok(x) => x.1,
+            Err(_) => panic!(),
+        };
+        assert_eq!(parsed, unsafe {
+            LocatedSpan::new_from_raw_offset(0, 1, "a", ())
+        });
+
+        let parsed = match tag_ws("a").parse(ParseInput::new(" a")) {
+            Ok(x) => x.1,
+            Err(_) => panic!(),
+        };
+        assert_eq!(parsed, unsafe {
+            LocatedSpan::new_from_raw_offset(1, 1, "a", ())
+        });
+
+        let parsed = match tag_ws("a").parse(ParseInput::new("  a")) {
+            Ok(x) => x.1,
+            Err(_) => panic!(),
+        };
+        assert_eq!(parsed, unsafe {
+            LocatedSpan::new_from_raw_offset(2, 1, "a", ())
+        });
+    }
+
+    #[test]
+    fn test_parse_identifier() -> () {
+        let parsed = match tag_ws("a").parse(ParseInput::new(" a")) {
+            Ok(x) => x.1,
+            Err(_) => panic!(),
+        };
+        assert_eq!(parsed, unsafe {
+            LocatedSpan::new_from_raw_offset(1, 1, "a", ())
+        });
+    }
 
     // TODO: Parse the rest of the fn.
     #[test]
