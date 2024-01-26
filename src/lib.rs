@@ -9,7 +9,7 @@ use nom::{
     bytes::streaming::{tag, take_till},
     character::streaming::{alpha1, alphanumeric1},
     combinator::recognize,
-    multi::{many0_count, separated_list0},
+    multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
 };
@@ -70,7 +70,7 @@ where
 pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
     let p = recognize(pair(
         alt((alpha1, tag("_"))),
-        many0_count(alt((alphanumeric1, tag("_")))),
+        many0(alt((alphanumeric1, tag("_")))),
     ));
     spanned(p).parse(input)
 }
@@ -138,7 +138,7 @@ mod tests {
     fn test_identifiers_raw_parser() -> () {
         match recognize(pair(
             alt((alpha1::<_, (_, nom::error::ErrorKind)>, tag("_"))),
-            many0_count(alt((alphanumeric1, tag("_")))),
+            many0(alt((alphanumeric1, tag("_")))),
         ))
         .parse("_foo23Bar rest")
         {
