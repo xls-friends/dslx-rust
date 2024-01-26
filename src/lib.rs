@@ -6,8 +6,8 @@
 //! At present, the [only] entry point is `parse_function_signature`, taking in an ast::ParseInput.
 use nom::{
     branch::alt,
-    bytes::streaming::{tag, take_till},
-    character::streaming::{alpha1, alphanumeric1},
+    bytes::complete::{tag, take_while},
+    character::complete::{alpha1, alphanumeric1},
     combinator::recognize,
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
@@ -26,7 +26,7 @@ pub fn preceding_whitespace<'a, O, P>(parser: P) -> impl FnMut(ParseInput<'a>) -
 where
     P: nom::Parser<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>,
 {
-    preceded(take_till(|c: char| !c.is_whitespace()), parser)
+    preceded(take_while(|c: char| c.is_whitespace()), parser)
 }
 
 /// Returns a "tag" parser that removes any preceding whitespace.
