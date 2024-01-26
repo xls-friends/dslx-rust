@@ -103,7 +103,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 mod tests {
     use nom_locate::LocatedSpan;
 
-    use crate::ast::{Parameter, RawFunctionSignature, RawIdentifier, RawParameter};
+    use crate::ast::{Parameter, Pos, RawFunctionSignature, RawIdentifier, RawParameter};
 
     use super::*;
 
@@ -150,10 +150,41 @@ mod tests {
         };
     }
 
+    #[test]
+    fn test_parse_identifier() -> () {
+        match parse_identifier(ParseInput::new(" _foo23Bar! ")) {
+            Ok(x) => assert_eq!(
+                x,
+                (
+                    unsafe { LocatedSpan::new_from_raw_offset(10, 1, "! ", (),) },
+                    Spanned {
+                        span: Span {
+                            start: Pos {
+                                input_offset: 1,
+                                line: 1,
+                                column: 2
+                            },
+                            end: Pos {
+                                input_offset: 10,
+                                line: 1,
+                                column: 11
+                            }
+                        },
+                        thing: RawIdentifier { name: "_foo23Bar" }
+                    }
+                ),
+            ),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+    }
+
     // FIXME
     //Error: Parsing requires 1 bytes/chars
     #[test]
-    fn test_parse_identifier() -> () {
+    fn test_parse_identifier2() -> () {
         let parsed = match parse_identifier(ParseInput::new("_foo23Bar")) {
             Ok(x) => x.1,
             Err(e) => {
