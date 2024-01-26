@@ -281,33 +281,4 @@ mod tests {
         };
         assert_eq!(parsed, expected);
     }
-
-    // // FIXME
-    // #[test]
-    // fn test_parse_param_list2() -> Result<(), String> {
-    //     let input = ParseInput::new("x: u32");
-    //     // let input = ParseInput::new(" x: u32, y: u16 ");
-    //     let expected = ParameterList {
-    //         span: Span::from(((9, 1, 10), (15, 1, 16))),
-    //         thing: vec![Parameter {
-    //             span: Span::from(((9, 1, 10), (15, 1, 16))),
-    //             thing: RawParameter {
-    //                 name: Identifier {
-    //                     span: Span::from(((9, 1, 10), (10, 1, 11))),
-    //                     thing: RawIdentifier { name: "x" },
-    //                 },
-    //                 param_type: Identifier {
-    //                     span: Span::from(((12, 1, 13), (15, 1, 16))),
-    //                     thing: RawIdentifier { name: "u32" },
-    //                 },
-    //             },
-    //         }],
-    //     };
-    //     let parsed = match parse_param_list0(input) {
-    //         Ok(foo) => foo.1,
-    //         Err(bar) => return Err(bar.to_string()),
-    //     };
-    //     assert_eq!(parsed, expected);
-    //     Ok(())
-    // }
 }
