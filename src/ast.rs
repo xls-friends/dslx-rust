@@ -86,8 +86,8 @@ pub struct Param<'a> {
     pub param_type: IdentifierSpanned<'a>,
 }
 
-impl<'a> From<(Spanned<Identifier<'a>>, Spanned<Identifier<'a>>)> for Param<'a> {
-    fn from((name, param_type): (Spanned<Identifier<'a>>, Spanned<Identifier<'a>>)) -> Self {
+impl<'a> From<(IdentifierSpanned<'a>, IdentifierSpanned<'a>)> for Param<'a> {
+    fn from((name, param_type): (IdentifierSpanned<'a>, IdentifierSpanned<'a>)) -> Self {
         Param { name, param_type }
     }
 }
@@ -102,16 +102,16 @@ pub struct FunctionSignature<'a> {
 
 impl<'a>
     From<(
-        Spanned<Identifier<'a>>,
-        Vec<Spanned<Param<'a>>>,
-        Spanned<Identifier<'a>>,
+        IdentifierSpanned<'a>,
+        Vec<ParamSpanned<'a>>,
+        IdentifierSpanned<'a>,
     )> for FunctionSignature<'a>
 {
     fn from(
         (name, parameters, result_type): (
-            Spanned<Identifier<'a>>,
-            Vec<Spanned<Param<'a>>>,
-            Spanned<Identifier<'a>>,
+            IdentifierSpanned<'a>,
+            Vec<ParamSpanned<'a>>,
+            IdentifierSpanned<'a>,
         ),
     ) -> Self {
         FunctionSignature {

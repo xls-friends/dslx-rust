@@ -16,10 +16,7 @@ use nom::{
 
 pub mod ast;
 
-use ast::{
-    FunctionSignature, FunctionSignatureSpanned, IdentifierSpanned, ParamSpanned, ParseInput, Span,
-    Spanned,
-};
+use ast::{FunctionSignatureSpanned, IdentifierSpanned, Param, ParseInput, Span, Spanned};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -79,7 +76,7 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<IdentifierSpanned> {
 }
 
 /// Parses a single param, e.g., `x: u32`.
-fn parse_param(input: ParseInput) -> ParseResult<ParamSpanned> {
+fn parse_param(input: ParseInput) -> ParseResult<Spanned<Param>> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -90,7 +87,7 @@ fn parse_param(input: ParseInput) -> ParseResult<ParamSpanned> {
 /// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
 //TODO do we want the parameter list's span too?
-fn parse_param_list0(input: ParseInput) -> ParseResult<Vec<ParamSpanned>> {
+fn parse_param_list0(input: ParseInput) -> ParseResult<Vec<Spanned<Param>>> {
     separated_list0(tag_ws(","), parse_param)(input)
 }
 
@@ -105,7 +102,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignatureS
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{Identifier, Param};
+    use crate::ast::{FunctionSignature, Identifier, Param, ParamSpanned};
 
     use super::*;
 
