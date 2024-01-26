@@ -16,7 +16,7 @@ use nom::{
 
 pub mod ast;
 
-use ast::{FunctionSignature, Identifier, ParseInput, RawParameter, Span, Spanned};
+use ast::{FunctionSignature, Identifier, ParameterList, ParseInput, RawParameter, Span, Spanned};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -86,9 +86,8 @@ fn parse_param(input: ParseInput) -> ParseResult<Spanned<RawParameter>> {
 
 /// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
-//TODO do we want the parameter list's span too?
-fn parse_param_list0(input: ParseInput) -> ParseResult<Vec<Spanned<RawParameter>>> {
-    separated_list0(tag_ws(","), parse_param)(input)
+fn parse_param_list0(input: ParseInput) -> ParseResult<ParameterList> {
+    spanned(separated_list0(tag_ws(","), parse_param))(input)
 }
 
 /// Parses a function signature, e.g.:
@@ -118,19 +117,22 @@ mod tests {
                     span: Span::from(((3, 1, 4), (8, 1, 9))),
                     thing: RawIdentifier { name: "add_1" },
                 },
-                parameters: vec![Parameter {
+                parameters: ParameterList {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
-                    thing: RawParameter {
-                        name: Identifier {
-                            span: Span::from(((9, 1, 10), (10, 1, 11))),
-                            thing: RawIdentifier { name: "x" },
+                    thing: vec![Parameter {
+                        span: Span::from(((9, 1, 10), (15, 1, 16))),
+                        thing: RawParameter {
+                            name: Identifier {
+                                span: Span::from(((9, 1, 10), (10, 1, 11))),
+                                thing: RawIdentifier { name: "x" },
+                            },
+                            param_type: Identifier {
+                                span: Span::from(((12, 1, 13), (15, 1, 16))),
+                                thing: RawIdentifier { name: "u32" },
+                            },
                         },
-                        param_type: Identifier {
-                            span: Span::from(((12, 1, 13), (15, 1, 16))),
-                            thing: RawIdentifier { name: "u32" },
-                        },
-                    },
-                }],
+                    }],
+                },
                 result_type: Identifier {
                     span: Span::from(((20, 1, 21), (23, 1, 24))),
                     thing: RawIdentifier { name: "u16" },

@@ -98,13 +98,13 @@ impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawParameter<'a> {
 #[derive(Debug, PartialEq)]
 pub struct RawFunctionSignature<'a> {
     pub name: Identifier<'a>,
-    pub parameters: Vec<Parameter<'a>>,
+    pub parameters: ParameterList<'a>,
     pub result_type: Identifier<'a>,
 }
 
-impl<'a> From<(Identifier<'a>, Vec<Parameter<'a>>, Identifier<'a>)> for RawFunctionSignature<'a> {
+impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFunctionSignature<'a> {
     fn from(
-        (name, parameters, result_type): (Identifier<'a>, Vec<Parameter<'a>>, Identifier<'a>),
+        (name, parameters, result_type): (Identifier<'a>, ParameterList<'a>, Identifier<'a>),
     ) -> Self {
         RawFunctionSignature {
             name,
@@ -123,4 +123,5 @@ pub struct Spanned<Thing> {
 
 pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
 pub type Parameter<'a> = Spanned<RawParameter<'a>>;
+pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
 pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
