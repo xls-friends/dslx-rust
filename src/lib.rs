@@ -63,7 +63,7 @@ where
     )
 }
 
-/// Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
+/// Parses a valid DSLX identifier, currently \[_A-Za-z]\[_A-Za-z0-9]*.
 ///
 /// # Example identifier
 /// _Foobar123
