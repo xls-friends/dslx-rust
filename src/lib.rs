@@ -16,7 +16,7 @@ use nom::{
 
 pub mod ast;
 
-use ast::{FunctionSignatureSpanned, IdentifierSpanned, Param, ParseInput, Span, Spanned};
+use ast::{FunctionSignature, Identifier, ParseInput, RawParameter, Span, Spanned};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -67,7 +67,7 @@ where
 ///
 /// # Example identifier
 /// _Foobar123
-pub fn parse_identifier(input: ParseInput) -> ParseResult<IdentifierSpanned> {
+pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
     let p = recognize(pair(
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
@@ -76,7 +76,7 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<IdentifierSpanned> {
 }
 
 /// Parses a single param, e.g., `x: u32`.
-fn parse_param(input: ParseInput) -> ParseResult<Spanned<Param>> {
+fn parse_param(input: ParseInput) -> ParseResult<Spanned<RawParameter>> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -87,13 +87,13 @@ fn parse_param(input: ParseInput) -> ParseResult<Spanned<Param>> {
 /// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
 //TODO do we want the parameter list's span too?
-fn parse_param_list0(input: ParseInput) -> ParseResult<Vec<Spanned<Param>>> {
+fn parse_param_list0(input: ParseInput) -> ParseResult<Vec<Spanned<RawParameter>>> {
     separated_list0(tag_ws(","), parse_param)(input)
 }
 
 /// Parses a function signature, e.g.:
 /// `fn foo(a: u32, b: u64) -> uN[128]`
-fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignatureSpanned> {
+fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature> {
     let name = preceded(tag_ws("fn"), parse_identifier);
     let parameters = delimited(tag_ws("("), parse_param_list0, tag_ws(")"));
     let ret_type = preceded(tag_ws("->"), parse_identifier);
@@ -102,7 +102,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignatureS
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{FunctionSignature, Identifier, Param, ParamSpanned};
+    use crate::ast::{Parameter, RawFunctionSignature, RawIdentifier, RawParameter};
 
     use super::*;
 
@@ -111,29 +111,29 @@ mod tests {
     fn parse_fn_signature() -> Result<(), String> {
         // FIXME this fails if I delete the trailing space (i.e. u16" fails).
         let input = ParseInput::new("fn add_1(x: u32) -> u16 ");
-        let expected = FunctionSignatureSpanned {
+        let expected = FunctionSignature {
             span: Span::from(((0, 1, 1), (23, 1, 24))),
-            thing: FunctionSignature {
-                name: IdentifierSpanned {
+            thing: RawFunctionSignature {
+                name: Identifier {
                     span: Span::from(((3, 1, 4), (8, 1, 9))),
-                    thing: Identifier { name: "add_1" },
+                    thing: RawIdentifier { name: "add_1" },
                 },
-                parameters: vec![ParamSpanned {
+                parameters: vec![Parameter {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
-                    thing: Param {
-                        name: IdentifierSpanned {
+                    thing: RawParameter {
+                        name: Identifier {
                             span: Span::from(((9, 1, 10), (10, 1, 11))),
-                            thing: Identifier { name: "x" },
+                            thing: RawIdentifier { name: "x" },
                         },
-                        param_type: IdentifierSpanned {
+                        param_type: Identifier {
                             span: Span::from(((12, 1, 13), (15, 1, 16))),
-                            thing: Identifier { name: "u32" },
+                            thing: RawIdentifier { name: "u32" },
                         },
                     },
                 }],
-                result_type: IdentifierSpanned {
+                result_type: Identifier {
                     span: Span::from(((20, 1, 21), (23, 1, 24))),
-                    thing: Identifier { name: "u16" },
+                    thing: RawIdentifier { name: "u16" },
                 },
             },
         };

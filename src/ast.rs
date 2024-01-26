@@ -66,14 +66,16 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
 }
 
 /// Represents a name of an entity, such as a type, variable, function, etc.
+///
+/// "Raw" means "not spanned".
 #[derive(Debug, PartialEq)]
-pub struct Identifier<'a> {
+pub struct RawIdentifier<'a> {
     pub name: &'a str,
 }
 
-impl<'a> From<LocatedSpan<&'a str>> for Identifier<'a> {
+impl<'a> From<LocatedSpan<&'a str>> for RawIdentifier<'a> {
     fn from(span: LocatedSpan<&'a str>) -> Self {
-        Identifier {
+        RawIdentifier {
             name: span.fragment(),
         }
     }
@@ -81,40 +83,30 @@ impl<'a> From<LocatedSpan<&'a str>> for Identifier<'a> {
 
 /// A parameter to a function, e.g., `foo: MyType`.
 #[derive(Debug, PartialEq)]
-pub struct Param<'a> {
-    pub name: IdentifierSpanned<'a>,
-    pub param_type: IdentifierSpanned<'a>,
+pub struct RawParameter<'a> {
+    pub name: Identifier<'a>,
+    pub param_type: Identifier<'a>,
 }
 
-impl<'a> From<(IdentifierSpanned<'a>, IdentifierSpanned<'a>)> for Param<'a> {
-    fn from((name, param_type): (IdentifierSpanned<'a>, IdentifierSpanned<'a>)) -> Self {
-        Param { name, param_type }
+impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawParameter<'a> {
+    fn from((name, param_type): (Identifier<'a>, Identifier<'a>)) -> Self {
+        RawParameter { name, param_type }
     }
 }
 
 /// A function signature, e.g: `fn foo(x:u32) -> u32`.
 #[derive(Debug, PartialEq)]
-pub struct FunctionSignature<'a> {
-    pub name: IdentifierSpanned<'a>,
-    pub parameters: Vec<ParamSpanned<'a>>,
-    pub result_type: IdentifierSpanned<'a>,
+pub struct RawFunctionSignature<'a> {
+    pub name: Identifier<'a>,
+    pub parameters: Vec<Parameter<'a>>,
+    pub result_type: Identifier<'a>,
 }
 
-impl<'a>
-    From<(
-        IdentifierSpanned<'a>,
-        Vec<ParamSpanned<'a>>,
-        IdentifierSpanned<'a>,
-    )> for FunctionSignature<'a>
-{
+impl<'a> From<(Identifier<'a>, Vec<Parameter<'a>>, Identifier<'a>)> for RawFunctionSignature<'a> {
     fn from(
-        (name, parameters, result_type): (
-            IdentifierSpanned<'a>,
-            Vec<ParamSpanned<'a>>,
-            IdentifierSpanned<'a>,
-        ),
+        (name, parameters, result_type): (Identifier<'a>, Vec<Parameter<'a>>, Identifier<'a>),
     ) -> Self {
-        FunctionSignature {
+        RawFunctionSignature {
             name,
             parameters,
             result_type,
@@ -129,6 +121,6 @@ pub struct Spanned<Thing> {
     pub thing: Thing,
 }
 
-pub type IdentifierSpanned<'a> = Spanned<Identifier<'a>>;
-pub type ParamSpanned<'a> = Spanned<Param<'a>>;
-pub type FunctionSignatureSpanned<'a> = Spanned<FunctionSignature<'a>>;
+pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
+pub type Parameter<'a> = Spanned<RawParameter<'a>>;
+pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
