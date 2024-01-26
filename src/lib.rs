@@ -135,14 +135,39 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_identifier() -> () {
-        let parsed = match tag_ws("a").parse(ParseInput::new(" a")) {
-            Ok(x) => x.1,
-            Err(_) => panic!(),
+    fn test_identifiers_raw_parser() -> () {
+        match recognize(pair(
+            alt((alpha1::<_, (_, nom::error::ErrorKind)>, tag("_"))),
+            many0_count(alt((alphanumeric1, tag("_")))),
+        ))
+        .parse("_foo23Bar rest")
+        {
+            Ok(x) => assert_eq!(x, (" rest", "_foo23Bar")),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
         };
-        assert_eq!(parsed, unsafe {
-            LocatedSpan::new_from_raw_offset(1, 1, "a", ())
-        });
+    }
+
+    // FIXME
+    //Error: Parsing requires 1 bytes/chars
+    #[test]
+    fn test_parse_identifier() -> () {
+        let parsed = match parse_identifier(ParseInput::new("_foo23Bar")) {
+            Ok(x) => x.1,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+        assert_eq!(
+            parsed,
+            Identifier {
+                span: todo!(),
+                thing: todo!()
+            }
+        );
     }
 
     // TODO: Parse the rest of the fn.
@@ -185,4 +210,33 @@ mod tests {
         };
         assert_eq!(parsed, expected);
     }
+
+    // // FIXME
+    // #[test]
+    // fn test_parse_param_list2() -> Result<(), String> {
+    //     let input = ParseInput::new("x: u32");
+    //     // let input = ParseInput::new(" x: u32, y: u16 ");
+    //     let expected = ParameterList {
+    //         span: Span::from(((9, 1, 10), (15, 1, 16))),
+    //         thing: vec![Parameter {
+    //             span: Span::from(((9, 1, 10), (15, 1, 16))),
+    //             thing: RawParameter {
+    //                 name: Identifier {
+    //                     span: Span::from(((9, 1, 10), (10, 1, 11))),
+    //                     thing: RawIdentifier { name: "x" },
+    //                 },
+    //                 param_type: Identifier {
+    //                     span: Span::from(((12, 1, 13), (15, 1, 16))),
+    //                     thing: RawIdentifier { name: "u32" },
+    //                 },
+    //             },
+    //         }],
+    //     };
+    //     let parsed = match parse_param_list0(input) {
+    //         Ok(foo) => foo.1,
+    //         Err(bar) => return Err(bar.to_string()),
+    //     };
+    //     assert_eq!(parsed, expected);
+    //     Ok(())
+    // }
 }
