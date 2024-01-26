@@ -197,11 +197,55 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_parse_param_list2() -> () {
+        let p = match parse_param_list0(ParseInput::new("x : u2,y : u4")) {
+            Ok(x) => x.1,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+        assert_eq!(
+            p,
+            Spanned {
+                span: Span::from(((0, 1, 1), (13, 1, 14))),
+                thing: vec![
+                    Spanned {
+                        span: Span::from(((0, 1, 1), (6, 1, 7))),
+                        thing: RawParameter {
+                            name: Spanned {
+                                span: Span::from(((0, 1, 1), (1, 1, 2))),
+                                thing: RawIdentifier { name: "x" }
+                            },
+                            param_type: Spanned {
+                                span: Span::from(((4, 1, 5), (6, 1, 7))),
+                                thing: RawIdentifier { name: "u2" }
+                            }
+                        }
+                    },
+                    Spanned {
+                        span: Span::from(((7, 1, 8), (13, 1, 14))),
+                        thing: RawParameter {
+                            name: Spanned {
+                                span: Span::from(((7, 1, 8), (8, 1, 9))),
+                                thing: RawIdentifier { name: "y" }
+                            },
+                            param_type: Spanned {
+                                span: Span::from(((11, 1, 12), (13, 1, 14))),
+                                thing: RawIdentifier { name: "u4" }
+                            }
+                        }
+                    }
+                ]
+            }
+        );
+    }
+
     // TODO: Parse the rest of the fn.
     #[test]
     fn test_parse_fn_signature() -> () {
-        // FIXME this fails if I delete the trailing space (i.e. u16" fails).
-        let input = ParseInput::new("fn add_1(x: u32) -> u16 ");
+        let input = ParseInput::new("fn add_1(x: u32) -> u16");
         let expected = FunctionSignature {
             span: Span::from(((0, 1, 1), (23, 1, 24))),
             thing: RawFunctionSignature {
