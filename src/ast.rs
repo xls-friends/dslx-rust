@@ -63,26 +63,63 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
     }
 }
 
-/// Represents a name of an entity, such as a type, variable, function, ...
+/// Represents a name of an entity, such as a type, variable, function, etc.
+///
+/// "Raw" means "not spanned".
 #[derive(Debug, PartialEq)]
-pub struct Identifier<'a> {
-    pub span: Span,
+pub struct RawIdentifier<'a> {
     pub name: &'a str,
+}
+
+impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
+    fn from(span: ParseInput<'a>) -> Self {
+        RawIdentifier {
+            name: span.fragment(),
+        }
+    }
 }
 
 /// A parameter to a function, e.g., `foo: MyType`.
 #[derive(Debug, PartialEq)]
-pub struct Param<'a> {
-    pub span: Span,
+pub struct RawParameter<'a> {
     pub name: Identifier<'a>,
     pub param_type: Identifier<'a>,
 }
 
+impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawParameter<'a> {
+    fn from((name, param_type): (Identifier<'a>, Identifier<'a>)) -> Self {
+        RawParameter { name, param_type }
+    }
+}
+
 /// A function signature, e.g: `fn foo(x:u32) -> u32`.
 #[derive(Debug, PartialEq)]
-pub struct FunctionSignature<'a> {
-    pub span: Span,
+pub struct RawFunctionSignature<'a> {
     pub name: Identifier<'a>,
-    pub params: Vec<Param<'a>>,
-    pub ret_type: Identifier<'a>,
+    pub parameters: ParameterList<'a>,
+    pub result_type: Identifier<'a>,
 }
+
+impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFunctionSignature<'a> {
+    fn from(
+        (name, parameters, result_type): (Identifier<'a>, ParameterList<'a>, Identifier<'a>),
+    ) -> Self {
+        RawFunctionSignature {
+            name,
+            parameters,
+            result_type,
+        }
+    }
+}
+
+/// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
+#[derive(Debug, PartialEq)]
+pub struct Spanned<Thing> {
+    pub span: Span,
+    pub thing: Thing,
+}
+
+pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
+pub type Parameter<'a> = Spanned<RawParameter<'a>>;
+pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
+pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
