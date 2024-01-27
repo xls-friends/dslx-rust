@@ -6,10 +6,10 @@
 //! At present, the [only] entry point is `parse_function_signature`, taking in an ast::ParseInput.
 use nom::{
     branch::alt,
-    bytes::streaming::{tag, take_till},
-    character::streaming::{alpha1, alphanumeric1},
+    bytes::complete::{tag, take_while},
+    character::complete::{alpha1, alphanumeric1},
     combinator::recognize,
-    multi::{many0_count, separated_list0},
+    multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
 };
@@ -26,7 +26,7 @@ pub fn preceding_whitespace<'a, O, P>(parser: P) -> impl FnMut(ParseInput<'a>) -
 where
     P: nom::Parser<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>,
 {
-    preceded(take_till(|c: char| !c.is_whitespace()), parser)
+    preceded(take_while(|c: char| c.is_whitespace()), parser)
 }
 
 /// Returns a "tag" parser that removes any preceding whitespace.
@@ -63,14 +63,14 @@ where
     )
 }
 
-/// Parses a valid DSLX identifier, currently [_A-Za-z][_A-Za-z0-9]*.
+/// Parses a valid DSLX identifier, currently \[_A-Za-z]\[_A-Za-z0-9]*.
 ///
 /// # Example identifier
 /// _Foobar123
 pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
     let p = recognize(pair(
         alt((alpha1, tag("_"))),
-        many0_count(alt((alphanumeric1, tag("_")))),
+        many0(alt((alphanumeric1, tag("_")))),
     ));
     spanned(p).parse(input)
 }
@@ -101,15 +101,151 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::{Parameter, RawFunctionSignature, RawIdentifier, RawParameter};
+    use nom_locate::LocatedSpan;
+
+    use crate::ast::{Parameter, Pos, RawFunctionSignature, RawIdentifier, RawParameter};
 
     use super::*;
 
+    #[test]
+    fn test_consumes_ws() -> () {
+        let parsed = match tag_ws("a").parse(ParseInput::new("a")) {
+            Ok(x) => x.1,
+            Err(_) => panic!(),
+        };
+        assert_eq!(parsed, unsafe {
+            LocatedSpan::new_from_raw_offset(0, 1, "a", ())
+        });
+
+        let parsed = match tag_ws("a").parse(ParseInput::new(" a")) {
+            Ok(x) => x.1,
+            Err(_) => panic!(),
+        };
+        assert_eq!(parsed, unsafe {
+            LocatedSpan::new_from_raw_offset(1, 1, "a", ())
+        });
+
+        let parsed = match tag_ws("a").parse(ParseInput::new("  a")) {
+            Ok(x) => x.1,
+            Err(_) => panic!(),
+        };
+        assert_eq!(parsed, unsafe {
+            LocatedSpan::new_from_raw_offset(2, 1, "a", ())
+        });
+    }
+
+    #[test]
+    fn test_identifiers_raw_parser() -> () {
+        match recognize(pair(
+            alt((alpha1::<_, (_, nom::error::ErrorKind)>, tag("_"))),
+            many0(alt((alphanumeric1, tag("_")))),
+        ))
+        .parse("_foo23Bar rest")
+        {
+            Ok(x) => assert_eq!(x, (" rest", "_foo23Bar")),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+    }
+
+    #[test]
+    fn test_parse_identifier() -> () {
+        match parse_identifier(ParseInput::new(" _foo23Bar! ")) {
+            Ok(x) => assert_eq!(
+                x,
+                (
+                    unsafe { LocatedSpan::new_from_raw_offset(10, 1, "! ", (),) },
+                    Spanned {
+                        span: Span::from(((1, 1, 2), (10, 1, 11))),
+                        thing: RawIdentifier { name: "_foo23Bar" }
+                    }
+                ),
+            ),
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+    }
+
+    #[test]
+    fn test_parse_param() -> () {
+        let p = match parse_param(ParseInput::new(" x : u2 ")) {
+            Ok(x) => x.1,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+        assert_eq!(
+            p,
+            Spanned {
+                span: Span::from(((1, 1, 2), (7, 1, 8))),
+                thing: RawParameter {
+                    name: Spanned {
+                        span: Span::from(((1, 1, 2), (2, 1, 3))),
+                        thing: RawIdentifier { name: "x" }
+                    },
+                    param_type: Spanned {
+                        span: Span::from(((5, 1, 6), (7, 1, 8))),
+                        thing: RawIdentifier { name: "u2" }
+                    }
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_param_list2() -> () {
+        let p = match parse_param_list0(ParseInput::new("x : u2,y : u4")) {
+            Ok(x) => x.1,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+        assert_eq!(
+            p,
+            Spanned {
+                span: Span::from(((0, 1, 1), (13, 1, 14))),
+                thing: vec![
+                    Spanned {
+                        span: Span::from(((0, 1, 1), (6, 1, 7))),
+                        thing: RawParameter {
+                            name: Spanned {
+                                span: Span::from(((0, 1, 1), (1, 1, 2))),
+                                thing: RawIdentifier { name: "x" }
+                            },
+                            param_type: Spanned {
+                                span: Span::from(((4, 1, 5), (6, 1, 7))),
+                                thing: RawIdentifier { name: "u2" }
+                            }
+                        }
+                    },
+                    Spanned {
+                        span: Span::from(((7, 1, 8), (13, 1, 14))),
+                        thing: RawParameter {
+                            name: Spanned {
+                                span: Span::from(((7, 1, 8), (8, 1, 9))),
+                                thing: RawIdentifier { name: "y" }
+                            },
+                            param_type: Spanned {
+                                span: Span::from(((11, 1, 12), (13, 1, 14))),
+                                thing: RawIdentifier { name: "u4" }
+                            }
+                        }
+                    }
+                ]
+            }
+        );
+    }
+
     // TODO: Parse the rest of the fn.
     #[test]
-    fn parse_fn_signature() -> Result<(), String> {
-        // FIXME this fails if I delete the trailing space (i.e. u16" fails).
-        let input = ParseInput::new("fn add_1(x: u32) -> u16 ");
+    fn test_parse_fn_signature() -> () {
+        let input = ParseInput::new("fn add_1(x: u32) -> u16");
         let expected = FunctionSignature {
             span: Span::from(((0, 1, 1), (23, 1, 24))),
             thing: RawFunctionSignature {
@@ -141,9 +277,8 @@ mod tests {
         };
         let parsed = match parse_function_signature(input) {
             Ok(foo) => foo.1,
-            Err(bar) => return Err(bar.to_string()),
+            Err(_) => panic!(),
         };
         assert_eq!(parsed, expected);
-        Ok(())
     }
 }
