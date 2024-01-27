@@ -16,7 +16,7 @@ use nom::{
 
 pub mod ast;
 
-use ast::{FunctionSignature, Identifier, ParameterList, ParseInput, RawParameter, Span, Spanned};
+use ast::{FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -76,7 +76,7 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
 }
 
 /// Parses a single param, e.g., `x: u32`.
-fn parse_param(input: ParseInput) -> ParseResult<Spanned<RawParameter>> {
+fn parse_param(input: ParseInput) -> ParseResult<Parameter> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),

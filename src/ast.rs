@@ -1,5 +1,3 @@
-use nom_locate::LocatedSpan;
-
 // Defines the types in the AST for DSLX.
 pub type ParseInput<'a> = nom_locate::LocatedSpan<&'a str>;
 
@@ -73,8 +71,8 @@ pub struct RawIdentifier<'a> {
     pub name: &'a str,
 }
 
-impl<'a> From<LocatedSpan<&'a str>> for RawIdentifier<'a> {
-    fn from(span: LocatedSpan<&'a str>) -> Self {
+impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
+    fn from(span: ParseInput<'a>) -> Self {
         RawIdentifier {
             name: span.fragment(),
         }
