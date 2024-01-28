@@ -6,17 +6,21 @@
 //! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
 pub mod ast;
 
-use ast::{FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned};
+use ast::{
+    FunctionSignature, Identifier, LiteralType, Parameter, ParameterList, ParseInput, Span, Spanned,
+};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
     character::complete::{alpha1, alphanumeric1, char, digit1},
-    combinator::{opt, recognize},
+    combinator::{map_opt, map_res, opt, recognize},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
 };
 use num_bigint::{BigInt, BigUint};
+
+use crate::ast::Signedness;
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -110,7 +114,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 /// `1361129467683753853853498429727072845824`
 fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
     let digits = preceding_whitespace(digit1);
-    nom::combinator::map_opt(digits, |s| {
+    map_opt(digits, |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 10)
     })
     .parse(input)
@@ -134,6 +138,24 @@ fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
             None => BigInt::from_biguint(num_bigint::Sign::Plus, bu),
         },
     )
+    .parse(input)
+}
+
+/// Parses a literal's type. E.g.:
+///
+/// `u16`
+///
+/// `s8`
+fn parse_literal_type(input: ParseInput) -> ParseResult<LiteralType> {
+    let sign = preceding_whitespace(alt((
+        char('s').map(|_| Signedness::Signed),
+        char('u').map(|_| Signedness::Unsgned),
+    )));
+    let width = map_res(digit1, |s: ParseInput| s.fragment().parse::<u64>());
+    nom::combinator::map(tuple((sign, width)), |(signedness, width)| LiteralType {
+        signedness,
+        width,
+    })
     .parse(input)
 }
 

@@ -119,6 +119,25 @@ impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFuncti
     }
 }
 
+/// Indicates a signed or unsigned integer
+#[derive(Debug, PartialEq)]
+pub enum Signedness {
+    Signed,
+    Unsgned,
+}
+
+/// The type of a literal (and every literal is an integer or bit array - depening on your
+/// interpretation) has a width and signedness. E.g.:
+///
+/// `u16` is 16 bits and unsigned
+///
+/// `s8` is 8 bits and signed
+pub struct LiteralType {
+    pub signedness: Signedness,
+    /// width, in bits
+    pub width: u64,
+}
+
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
 #[derive(Debug, PartialEq)]
 pub struct Spanned<Thing> {
