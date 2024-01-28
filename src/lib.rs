@@ -110,6 +110,8 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 /// `0b10`
 ///
 /// `0b0011`
+///
+/// TODO support _ in literals
 fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
     let prefix = tag_ws("0b");
     let digits = take_while1(|c: char| c == '0' || c == '1');
@@ -128,6 +130,8 @@ fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
 /// `42`
 ///
 /// `1361129467683753853853498429727072845824`
+///
+/// TODO support _ in literals
 fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
     let digits = preceding_whitespace(digit1);
     map_opt(digits, |s| {
@@ -143,6 +147,8 @@ fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
 /// `0x1f`
 ///
 /// `0xaB3`
+///
+/// TODO support _ in literals
 fn parse_unsigned_hexadecimal(input: ParseInput) -> ParseResult<BigUint> {
     map_opt(preceded(tag_ws("0x"), hex_digit1), |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 16)
