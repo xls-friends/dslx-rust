@@ -12,8 +12,10 @@ use ast::{
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
+    character::complete::hex_digit1,
     character::complete::{alpha1, alphanumeric1, char, digit1},
-    combinator::{map_opt, map_res, opt, recognize, verify},
+    combinator::verify,
+    combinator::{map_opt, map_res, opt, recognize},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
@@ -130,6 +132,21 @@ fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
     let digits = preceding_whitespace(digit1);
     map_opt(digits, |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 10)
+    })
+    .parse(input)
+}
+
+/// Parses an unsigned hexadecimal integer (including the `0x` prefix) of arbitrary length, e.g.:
+///
+/// `0xAbCd`
+///
+/// `0x1f`
+///
+/// `0XaB3`
+fn parse_unsigned_hexadecimal(input: ParseInput) -> ParseResult<BigUint> {
+    let prefix = preceding_whitespace(tag("0x").or(tag("0X")));
+    map_opt(preceded(prefix, hex_digit1), |s| {
+        BigUint::parse_bytes(s.fragment().as_bytes(), 16)
     })
     .parse(input)
 }
@@ -440,6 +457,54 @@ mod tests {
             parse_unsigned_decimal(ParseInput::new("1361129467683753853853498429727072845824"))
                 .unwrap();
         assert_eq!(two_tothe_130, two_tothe_65.clone() * two_tothe_65.clone());
+    }
+
+    #[test]
+    fn test_parse_unsigned_hexadecimal() -> () {
+        // at least 1 digit is required
+        parse_unsigned_hexadecimal(ParseInput::new("")).expect_err("");
+        parse_unsigned_hexadecimal(ParseInput::new("0")).expect_err("");
+        parse_unsigned_hexadecimal(ParseInput::new("0x")).expect_err("");
+
+        // negative not accepted
+        parse_unsigned_hexadecimal(ParseInput::new("-0x1")).expect_err("");
+
+        // fractions not accepted
+        parse_unsigned_hexadecimal(ParseInput::new("0x.1")).expect_err("");
+
+        // Ensure that radix is 16
+        parse_unsigned_hexadecimal(ParseInput::new("0xg")).expect_err("");
+        parse_unsigned_hexadecimal(ParseInput::new("0xG")).expect_err("");
+
+        // x and X
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x1")).unwrap();
+        assert_eq!(num, BigUint::from_u128(1).unwrap());
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0X1")).unwrap();
+        assert_eq!(num, BigUint::from_u128(1).unwrap());
+
+        // accepts whitespace
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new(" 0x1")).unwrap();
+        assert_eq!(num, BigUint::from_u128(1).unwrap());
+
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x0")).unwrap();
+        assert_eq!(num, BigUint::from_u128(0).unwrap());
+
+        // upper and lowercase hex digits accepted
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xff")).unwrap();
+        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xfF")).unwrap();
+        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xFf")).unwrap();
+        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xFF")).unwrap();
+        assert_eq!(num, BigUint::from_u128(255).unwrap());
+
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xabcdef0123456789")).unwrap();
+        assert_eq!(num, BigUint::from_u128(12379813738877118345).unwrap());
+
+        // leading zeros are accepted
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x0101")).unwrap();
+        assert_eq!(num, BigUint::from_u128(256 + 1).unwrap());
     }
 
     #[test]
