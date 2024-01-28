@@ -1,9 +1,9 @@
-//! [WIP] parser for the DSLX language.
+//! **WIP** parser for the DSLX language.
 //!
-//! Full language defined here: https://google.github.io/xls/dslx_reference/.
+//! Full language defined here: <https://google.github.io/xls/dslx_reference/>
 //! Currently a spooky scary skeleton, but actively being built out.
 //!
-//! At present, the [only] entry point is `parse_function_signature`, taking in an ast::ParseInput.
+//! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
