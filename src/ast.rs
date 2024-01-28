@@ -132,10 +132,18 @@ pub enum Signedness {
 /// `u16` is 16 bits and unsigned
 ///
 /// `s8` is 8 bits and signed
-pub struct LiteralType {
+pub struct RawLiteralType {
     pub signedness: Signedness,
     /// width, in bits
     pub width: u64,
+}
+
+pub type LiteralType = Spanned<RawLiteralType>;
+
+impl<'a> From<(Signedness, u64)> for RawLiteralType {
+    fn from((signedness, width): (Signedness, u64)) -> Self {
+        RawLiteralType { signedness, width }
+    }
 }
 
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.

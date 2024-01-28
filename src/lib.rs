@@ -152,11 +152,7 @@ fn parse_literal_type(input: ParseInput) -> ParseResult<LiteralType> {
         char('u').map(|_| Signedness::Unsgned),
     )));
     let width = map_res(digit1, |s: ParseInput| s.fragment().parse::<u64>());
-    nom::combinator::map(tuple((sign, width)), |(signedness, width)| LiteralType {
-        signedness,
-        width,
-    })
-    .parse(input)
+    spanned(tuple((sign, width))).parse(input)
 }
 
 #[cfg(test)]
