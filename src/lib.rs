@@ -13,7 +13,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
     character::complete::{alpha1, alphanumeric1, char, digit1},
-    combinator::{map_opt, map_res, opt, recognize},
+    combinator::{map_opt, map_res, opt, recognize, verify},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
@@ -141,17 +141,23 @@ fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
     .parse(input)
 }
 
-/// Parses a literal's type. E.g.:
+/// Parses a shorthand bit type. E.g.:
 ///
-/// `u16`
+/// `u1` `u16`
 ///
-/// `s8`
-fn parse_literal_type(input: ParseInput) -> ParseResult<LiteralType> {
+/// `s8` `s63`
+///
+/// See <https://google.github.io/xls/dslx_reference/#bit-type>
+fn parse_bit_type_shorthand(input: ParseInput) -> ParseResult<LiteralType> {
     let sign = preceding_whitespace(alt((
         char('s').map(|_| Signedness::Signed),
         char('u').map(|_| Signedness::Unsigned),
     )));
-    let width = map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>());
+    let width = verify(
+        map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>()),
+        // "These are defined up to u64."
+        |&width| width <= 64,
+    );
     spanned(tuple((sign, width))).parse(input)
 }
 
@@ -420,22 +426,22 @@ mod tests {
     #[test]
     fn test_parse_literal_type() -> () {
         // must start with s or u
-        parse_literal_type(ParseInput::new("")).expect_err("");
-        parse_literal_type(ParseInput::new("1")).expect_err("");
-        parse_literal_type(ParseInput::new("a")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new("")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new("1")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new("a")).expect_err("");
 
         // no space after {s,u}
-        parse_literal_type(ParseInput::new(" s 1 ")).expect_err("");
-        parse_literal_type(ParseInput::new(" u 1 ")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new(" s 1 ")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new(" u 1 ")).expect_err("");
 
-        parse_literal_type(ParseInput::new(" s1 ")).expect("");
-        parse_literal_type(ParseInput::new(" u1 ")).expect("");
+        parse_bit_type_shorthand(ParseInput::new(" s1 ")).expect("");
+        parse_bit_type_shorthand(ParseInput::new(" u1 ")).expect("");
 
         // TODO what to do about 0 width? error or ok?
-        parse_literal_type(ParseInput::new("s0")).expect("");
-        parse_literal_type(ParseInput::new("u0")).expect("");
+        parse_bit_type_shorthand(ParseInput::new("s0")).expect("");
+        parse_bit_type_shorthand(ParseInput::new("u0")).expect("");
 
-        let (_, r) = parse_literal_type(ParseInput::new("s1")).unwrap();
+        let (_, r) = parse_bit_type_shorthand(ParseInput::new("s1")).unwrap();
         assert_eq!(
             r.thing,
             RawLiteralType {
@@ -444,7 +450,7 @@ mod tests {
             }
         );
 
-        let (_, r) = parse_literal_type(ParseInput::new("u1")).unwrap();
+        let (_, r) = parse_bit_type_shorthand(ParseInput::new("u1")).unwrap();
         assert_eq!(
             r.thing,
             RawLiteralType {
@@ -453,26 +459,10 @@ mod tests {
             }
         );
 
-        // 2^(32)-1 is largest valid
-        let (_, r) = parse_literal_type(ParseInput::new("s4294967295")).unwrap();
-        assert_eq!(
-            r.thing,
-            RawLiteralType {
-                signedness: Signedness::Signed,
-                width: Usize(4294967295)
-            }
-        );
-        let (_, r) = parse_literal_type(ParseInput::new("u4294967295")).unwrap();
-        assert_eq!(
-            r.thing,
-            RawLiteralType {
-                signedness: Signedness::Unsigned,
-                width: Usize(4294967295)
-            }
-        );
-
-        // 2^32 is too big
-        parse_literal_type(ParseInput::new("u4294967296")).expect_err("");
-        parse_literal_type(ParseInput::new("s4294967296")).expect_err("");
+        // 64 is the largest
+        parse_bit_type_shorthand(ParseInput::new("u64")).expect("");
+        parse_bit_type_shorthand(ParseInput::new("s64")).expect("");
+        parse_bit_type_shorthand(ParseInput::new("u65")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new("s65")).expect_err("");
     }
 }
