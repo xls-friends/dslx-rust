@@ -133,24 +133,26 @@ pub enum Signedness {
 #[derive(Debug, PartialEq)]
 pub struct Usize(pub u32);
 
-/// The type of a literal (and every literal is an integer or bit array - depening on your
-/// interpretation) has a width and signedness. E.g.:
+/// The "variable length bit type" is "The most fundamental type in DSLX". It has a width (AKA
+/// length) and signedness. E.g.:
 ///
 /// `u16` is 16 bits and unsigned
 ///
 /// `s8` is 8 bits and signed
+///
+/// See <https://google.github.io/xls/dslx_reference/#bit-type>
 #[derive(Debug, PartialEq)]
-pub struct RawLiteralType {
+pub struct RawBitType {
     pub signedness: Signedness,
     /// width, in bits
     pub width: Usize,
 }
 
-pub type LiteralType = Spanned<RawLiteralType>;
+pub type BitType = Spanned<RawBitType>;
 
-impl<'a> From<(Signedness, u32)> for RawLiteralType {
+impl<'a> From<(Signedness, u32)> for RawBitType {
     fn from((signedness, width): (Signedness, u32)) -> Self {
-        RawLiteralType {
+        RawBitType {
             signedness,
             width: Usize(width),
         }

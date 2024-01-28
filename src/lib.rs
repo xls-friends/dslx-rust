@@ -7,7 +7,7 @@
 pub mod ast;
 
 use ast::{
-    FunctionSignature, Identifier, LiteralType, Parameter, ParameterList, ParseInput, Span, Spanned,
+    BitType, FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned,
 };
 use nom::{
     branch::alt,
@@ -148,7 +148,7 @@ fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
 /// `s8` `s63`
 ///
 /// See <https://google.github.io/xls/dslx_reference/#bit-type>
-fn parse_bit_type_shorthand(input: ParseInput) -> ParseResult<LiteralType> {
+fn parse_bit_type_shorthand(input: ParseInput) -> ParseResult<BitType> {
     let sign = preceding_whitespace(alt((
         char('s').map(|_| Signedness::Signed),
         char('u').map(|_| Signedness::Unsigned),
@@ -168,7 +168,7 @@ mod tests {
     use num_traits::cast::FromPrimitive;
 
     use crate::ast::{
-        Parameter, RawFunctionSignature, RawIdentifier, RawLiteralType, RawParameter, Usize,
+        Parameter, RawBitType, RawFunctionSignature, RawIdentifier, RawParameter, Usize,
     };
 
     use super::*;
@@ -444,7 +444,7 @@ mod tests {
         let (_, r) = parse_bit_type_shorthand(ParseInput::new("s1")).unwrap();
         assert_eq!(
             r.thing,
-            RawLiteralType {
+            RawBitType {
                 signedness: Signedness::Signed,
                 width: Usize(1)
             }
@@ -453,7 +453,7 @@ mod tests {
         let (_, r) = parse_bit_type_shorthand(ParseInput::new("u1")).unwrap();
         assert_eq!(
             r.thing,
-            RawLiteralType {
+            RawBitType {
                 signedness: Signedness::Unsigned,
                 width: Usize(1)
             }
