@@ -123,8 +123,15 @@ impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFuncti
 #[derive(Debug, PartialEq)]
 pub enum Signedness {
     Signed,
-    Unsgned,
+    Unsigned,
 }
+
+/// Values that turn into array dimensions (AKA bit widths) all become this.
+///
+/// See https://github.com/google/xls/issues/450 to understand why we have this type, instead
+/// of just using `u32` to store bit widths.
+#[derive(Debug, PartialEq)]
+pub struct Usize(pub u32);
 
 /// The type of a literal (and every literal is an integer or bit array - depening on your
 /// interpretation) has a width and signedness. E.g.:
@@ -132,17 +139,21 @@ pub enum Signedness {
 /// `u16` is 16 bits and unsigned
 ///
 /// `s8` is 8 bits and signed
+#[derive(Debug, PartialEq)]
 pub struct RawLiteralType {
     pub signedness: Signedness,
     /// width, in bits
-    pub width: u64,
+    pub width: Usize,
 }
 
 pub type LiteralType = Spanned<RawLiteralType>;
 
-impl<'a> From<(Signedness, u64)> for RawLiteralType {
-    fn from((signedness, width): (Signedness, u64)) -> Self {
-        RawLiteralType { signedness, width }
+impl<'a> From<(Signedness, u32)> for RawLiteralType {
+    fn from((signedness, width): (Signedness, u32)) -> Self {
+        RawLiteralType {
+            signedness,
+            width: Usize(width),
+        }
     }
 }
 
