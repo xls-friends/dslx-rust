@@ -7,7 +7,7 @@
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
-    character::complete::{alpha1, alphanumeric1},
+    character::complete::{alpha1, alphanumeric1, digit1},
     combinator::recognize,
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
@@ -99,11 +99,31 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
     spanned(tuple((name, parameters, ret_type))).parse(input)
 }
 
+/// Parses an unsigned decimal integer of arbitrary length, e.g.:
+///
+/// `0`
+///
+/// `1`
+///
+/// `42`
+///
+/// `1361129467683753853853498429727072845824`
+/// This last example is 2^130
+fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<num_bigint::BigUint> {
+    let digits = preceding_whitespace(digit1);
+    nom::combinator::map_opt(digits, |s| {
+        num_bigint::BigUint::parse_bytes(s.fragment().as_bytes(), 10)
+    })
+    .parse(input)
+}
+
 #[cfg(test)]
 mod tests {
     use nom_locate::LocatedSpan;
 
-    use crate::ast::{Parameter, Pos, RawFunctionSignature, RawIdentifier, RawParameter};
+    use num_traits::cast::FromPrimitive;
+
+    use crate::ast::{Parameter, RawFunctionSignature, RawIdentifier, RawParameter};
 
     use super::*;
 
@@ -280,5 +300,45 @@ mod tests {
             Err(_) => panic!(),
         };
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_parse_unsigned_decimal() -> () {
+        // at least 1 digit is required
+        parse_unsigned_decimal(ParseInput::new("")).expect_err("");
+
+        parse_unsigned_decimal(ParseInput::new("q0")).expect_err("");
+        parse_unsigned_decimal(ParseInput::new(" q0")).expect_err("");
+
+        // negative not accepted
+        parse_unsigned_decimal(ParseInput::new("-1")).expect_err("");
+
+        // fractions not accepted
+        parse_unsigned_decimal(ParseInput::new(".1")).expect_err("");
+
+        // Ensure that radix is 10
+        parse_unsigned_decimal(ParseInput::new("a")).expect_err("");
+        parse_unsigned_decimal(ParseInput::new("A")).expect_err("");
+
+        let (rest, num) = parse_unsigned_decimal(ParseInput::new(" 0a ")).unwrap();
+        assert_eq!(num, num_bigint::BigUint::from_u128(0).unwrap());
+        assert_eq!(rest, unsafe {
+            LocatedSpan::new_from_raw_offset(2, 1, "a ", ())
+        });
+
+        let (_, num) = parse_unsigned_decimal(ParseInput::new("1")).unwrap();
+        assert_eq!(num, num_bigint::BigUint::from_u128(1).unwrap());
+
+        let (_, num) = parse_unsigned_decimal(ParseInput::new("95")).unwrap();
+        assert_eq!(num, num_bigint::BigUint::from_u128(95).unwrap());
+
+        let (_, num) = parse_unsigned_decimal(ParseInput::new("36893488147419103232")).unwrap();
+        let two_tothe_65 = num_bigint::BigUint::from_u128(36893488147419103232).unwrap();
+        assert_eq!(num, two_tothe_65);
+
+        let (_, two_tothe_130) =
+            parse_unsigned_decimal(ParseInput::new("1361129467683753853853498429727072845824"))
+                .unwrap();
+        assert_eq!(two_tothe_130, two_tothe_65.clone() * two_tothe_65.clone());
     }
 }
