@@ -111,7 +111,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 ///
 /// `0b0011`
 fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
-    let prefix = preceding_whitespace(tag("0b").or(tag("0B")));
+    let prefix = tag_ws("0b");
     let digits = take_while1(|c: char| c == '0' || c == '1');
     map_opt(preceded(prefix, digits), |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 2)
@@ -142,10 +142,9 @@ fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
 ///
 /// `0x1f`
 ///
-/// `0XaB3`
+/// `0xaB3`
 fn parse_unsigned_hexadecimal(input: ParseInput) -> ParseResult<BigUint> {
-    let prefix = preceding_whitespace(tag("0x").or(tag("0X")));
-    map_opt(preceded(prefix, hex_digit1), |s| {
+    map_opt(preceded(tag_ws("0x"), hex_digit1), |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 16)
     })
     .parse(input)
@@ -395,14 +394,11 @@ mod tests {
         // Ensure that radix is 10
         parse_unsigned_binary(ParseInput::new("0b2")).expect_err("");
 
+        // 0B invalid
+        parse_unsigned_binary(ParseInput::new("0B1")).expect_err("");
+
         // accepts whitespace
         let (_, num) = parse_unsigned_binary(ParseInput::new(" 0b1")).unwrap();
-        assert_eq!(num, BigUint::from_u128(1).unwrap());
-
-        // b and B
-        let (_, num) = parse_unsigned_binary(ParseInput::new("0b1")).unwrap();
-        assert_eq!(num, BigUint::from_u128(1).unwrap());
-        let (_, num) = parse_unsigned_binary(ParseInput::new("0B1")).unwrap();
         assert_eq!(num, BigUint::from_u128(1).unwrap());
 
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b1")).unwrap();
@@ -482,11 +478,8 @@ mod tests {
         parse_unsigned_hexadecimal(ParseInput::new("0xg")).expect_err("");
         parse_unsigned_hexadecimal(ParseInput::new("0xG")).expect_err("");
 
-        // x and X
-        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x1")).unwrap();
-        assert_eq!(num, BigUint::from_u128(1).unwrap());
-        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0X1")).unwrap();
-        assert_eq!(num, BigUint::from_u128(1).unwrap());
+        // 0X invalid
+        parse_unsigned_hexadecimal(ParseInput::new("0X1")).expect_err("");
 
         // accepts whitespace
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new(" 0x1")).unwrap();
