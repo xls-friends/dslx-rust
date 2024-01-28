@@ -11,7 +11,7 @@ use ast::{
 };
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_while},
+    bytes::complete::{tag, take_while, take_while1},
     character::complete::{alpha1, alphanumeric1, char, digit1},
     combinator::{map_opt, map_res, opt, recognize, verify},
     multi::{many0, separated_list0},
@@ -110,7 +110,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 /// `0b0011`
 fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
     let prefix = tag_ws("0b");
-    let digits = take_while(|c: char| c == '0' || c == '1');
+    let digits = take_while1(|c: char| c == '0' || c == '1');
     map_opt(preceded(prefix, digits), |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 2)
     })
