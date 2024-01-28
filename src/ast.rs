@@ -71,6 +71,8 @@ pub struct RawIdentifier<'a> {
     pub name: &'a str,
 }
 
+pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
+
 impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
     fn from(span: ParseInput<'a>) -> Self {
         RawIdentifier {
@@ -86,6 +88,9 @@ pub struct RawParameter<'a> {
     pub param_type: Identifier<'a>,
 }
 
+pub type Parameter<'a> = Spanned<RawParameter<'a>>;
+pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
+
 impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawParameter<'a> {
     fn from((name, param_type): (Identifier<'a>, Identifier<'a>)) -> Self {
         RawParameter { name, param_type }
@@ -99,6 +104,8 @@ pub struct RawFunctionSignature<'a> {
     pub parameters: ParameterList<'a>,
     pub result_type: Identifier<'a>,
 }
+
+pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
 
 impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFunctionSignature<'a> {
     fn from(
@@ -118,8 +125,3 @@ pub struct Spanned<Thing> {
     pub span: Span,
     pub thing: Thing,
 }
-
-pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
-pub type Parameter<'a> = Spanned<RawParameter<'a>>;
-pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
-pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
