@@ -4,6 +4,9 @@
 //! Currently a spooky scary skeleton, but actively being built out.
 //!
 //! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
+pub mod ast;
+
+use ast::{FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
@@ -13,10 +16,6 @@ use nom::{
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
 };
-
-pub mod ast;
-
-use ast::{FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
