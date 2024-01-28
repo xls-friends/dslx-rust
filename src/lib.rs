@@ -112,7 +112,6 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<num_bigint::BigUint> {
     let digits = preceding_whitespace(digit1);
     nom::combinator::map_opt(digits, |s| {
-        // TODO also try https://docs.rs/num-bigint/latest/num_bigint/struct.BigInt.html#method.from_str
         num_bigint::BigUint::parse_bytes(s.fragment().as_bytes(), 10)
     })
     .parse(input)
