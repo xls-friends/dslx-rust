@@ -103,6 +103,20 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
     spanned(tuple((name, parameters, ret_type))).parse(input)
 }
 
+/// Parses an unsigned binary integer (including the `0b` prefix) of arbitrary length, e.g.:
+///
+/// `0b10`
+///
+/// `0b0011`
+fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
+    let prefix = tag_ws("0b");
+    let digits = take_while(|c: char| c == '0' || c == '1');
+    map_opt(preceded(prefix, digits), |s| {
+        BigUint::parse_bytes(s.fragment().as_bytes(), 2)
+    })
+    .parse(input)
+}
+
 /// Parses an unsigned decimal integer of arbitrary length, e.g.:
 ///
 /// `0`
@@ -346,6 +360,46 @@ mod tests {
             Err(_) => panic!(),
         };
         assert_eq!(parsed, expected);
+    }
+
+    #[test]
+    fn test_parse_unsigned_binary() -> () {
+        // at least 1 digit is required
+        parse_unsigned_binary(ParseInput::new("")).expect_err("");
+        parse_unsigned_binary(ParseInput::new("0")).expect_err("");
+        parse_unsigned_binary(ParseInput::new("0b")).expect_err("");
+
+        // negative not accepted
+        parse_unsigned_binary(ParseInput::new("-0b1")).expect_err("");
+
+        // fractions not accepted
+        parse_unsigned_binary(ParseInput::new("0b.1")).expect_err("");
+
+        // Ensure that radix is 10
+        parse_unsigned_binary(ParseInput::new("0b2")).expect_err("");
+
+        // accepts whitespace
+        let (_, num) = parse_unsigned_binary(ParseInput::new(" 0b1")).unwrap();
+        assert_eq!(num, BigUint::from_u128(1).unwrap());
+
+        let (_, num) = parse_unsigned_binary(ParseInput::new("0b1")).unwrap();
+        assert_eq!(num, BigUint::from_u128(1).unwrap());
+
+        let (_, num) = parse_unsigned_binary(ParseInput::new("0b11")).unwrap();
+        assert_eq!(num, BigUint::from_u128(3).unwrap());
+
+        let (_, num) = parse_unsigned_binary(ParseInput::new("0b101")).unwrap();
+        assert_eq!(num, BigUint::from_u128(4 + 1).unwrap());
+
+        let (_, num) = parse_unsigned_binary(ParseInput::new(
+            "0b1000000000000000000000000000000000000000000000000000000000000000000000000",
+        ))
+        .unwrap();
+        assert_eq!(num, BigUint::from_u128(1 << 72).unwrap());
+
+        // leading zeros are accepted
+        let (_, num) = parse_unsigned_binary(ParseInput::new("0b0101")).unwrap();
+        assert_eq!(num, BigUint::from_u128(4 + 1).unwrap());
     }
 
     #[test]
