@@ -10,12 +10,13 @@ use ast::{FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, S
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
-    character::complete::{alpha1, alphanumeric1, digit1},
-    combinator::recognize,
+    character::complete::{alpha1, alphanumeric1, char, digit1},
+    combinator::{opt, recognize},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
 };
+use num_bigint::{BigInt, BigUint};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -107,12 +108,32 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 /// `42`
 ///
 /// `1361129467683753853853498429727072845824`
-/// This last example is 2^130
-fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<num_bigint::BigUint> {
+fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
     let digits = preceding_whitespace(digit1);
     nom::combinator::map_opt(digits, |s| {
-        num_bigint::BigUint::parse_bytes(s.fragment().as_bytes(), 10)
+        BigUint::parse_bytes(s.fragment().as_bytes(), 10)
     })
+    .parse(input)
+}
+
+/// Parses a signed decimal integer of arbitrary length, e.g.:
+///
+/// `0`
+///
+/// `-1`
+///
+/// `42`
+///
+/// `1361129467683753853853498429727072845824`
+fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
+    let negative = opt(preceding_whitespace(char('-')));
+    nom::combinator::map(
+        tuple((negative, parse_unsigned_decimal)),
+        |(neg, bu)| match neg {
+            Some(_) => BigInt::from_biguint(num_bigint::Sign::Minus, bu),
+            None => BigInt::from_biguint(num_bigint::Sign::Plus, bu),
+        },
+    )
     .parse(input)
 }
 
@@ -320,24 +341,59 @@ mod tests {
         parse_unsigned_decimal(ParseInput::new("A")).expect_err("");
 
         let (rest, num) = parse_unsigned_decimal(ParseInput::new(" 0a ")).unwrap();
-        assert_eq!(num, num_bigint::BigUint::from_u128(0).unwrap());
+        assert_eq!(num, BigUint::from_u128(0).unwrap());
         assert_eq!(rest, unsafe {
             LocatedSpan::new_from_raw_offset(2, 1, "a ", ())
         });
 
         let (_, num) = parse_unsigned_decimal(ParseInput::new("1")).unwrap();
-        assert_eq!(num, num_bigint::BigUint::from_u128(1).unwrap());
+        assert_eq!(num, BigUint::from_u128(1).unwrap());
 
         let (_, num) = parse_unsigned_decimal(ParseInput::new("95")).unwrap();
-        assert_eq!(num, num_bigint::BigUint::from_u128(95).unwrap());
+        assert_eq!(num, BigUint::from_u128(95).unwrap());
 
         let (_, num) = parse_unsigned_decimal(ParseInput::new("36893488147419103232")).unwrap();
-        let two_tothe_65 = num_bigint::BigUint::from_u128(36893488147419103232).unwrap();
+        let two_tothe_65 = BigUint::from_u128(36893488147419103232).unwrap();
         assert_eq!(num, two_tothe_65);
 
         let (_, two_tothe_130) =
             parse_unsigned_decimal(ParseInput::new("1361129467683753853853498429727072845824"))
                 .unwrap();
         assert_eq!(two_tothe_130, two_tothe_65.clone() * two_tothe_65.clone());
+    }
+
+    #[test]
+    fn test_parse_signed_decimal() -> () {
+        // at least 1 digit is required
+        parse_signed_decimal(ParseInput::new("")).expect_err("");
+
+        parse_signed_decimal(ParseInput::new("q0")).expect_err("");
+
+        // whitespace accepted
+        let (_, num) = parse_signed_decimal(ParseInput::new(" - 1")).unwrap();
+        assert_eq!(num, BigInt::from_i128(-1).unwrap());
+
+        // negative accepted
+        let (_, num) = parse_signed_decimal(ParseInput::new("-0")).unwrap();
+        assert_eq!(num, BigInt::from_i128(0).unwrap());
+
+        let (_, num) = parse_signed_decimal(ParseInput::new("-1")).unwrap();
+        assert_eq!(num, BigInt::from_i128(-1).unwrap());
+
+        let (_, num) = parse_signed_decimal(ParseInput::new("0")).unwrap();
+        assert_eq!(num, BigInt::from_i128(0).unwrap());
+        let (_, num) = parse_signed_decimal(ParseInput::new("1")).unwrap();
+        assert_eq!(num, BigInt::from_i128(1).unwrap());
+
+        // fractions not accepted
+        parse_signed_decimal(ParseInput::new(".1")).expect_err("");
+
+        // Ensure that radix is 10
+        parse_signed_decimal(ParseInput::new("a")).expect_err("");
+        parse_signed_decimal(ParseInput::new("A")).expect_err("");
+
+        let (_, num) = parse_signed_decimal(ParseInput::new("-36893488147419103232")).unwrap();
+        let two_tothe_65 = BigInt::from_i128(-36893488147419103232).unwrap();
+        assert_eq!(num, two_tothe_65);
     }
 }
