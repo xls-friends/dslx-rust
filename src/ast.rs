@@ -1,3 +1,5 @@
+use num_bigint::{BigInt, BigUint};
+
 // Defines the types in the AST for DSLX.
 pub type ParseInput<'a> = nom_locate::LocatedSpan<&'a str>;
 
@@ -158,6 +160,34 @@ impl<'a> From<(Signedness, u32)> for RawBitType {
         }
     }
 }
+
+#[derive(Debug, PartialEq)]
+pub enum RawInteger {
+    Unsigned(BigUint),
+    Signed(BigInt),
+}
+
+impl<'a> From<BigUint> for RawInteger {
+    fn from(x: BigUint) -> Self {
+        RawInteger::Unsigned(x)
+    }
+}
+
+impl<'a> From<BigInt> for RawInteger {
+    fn from(x: BigInt) -> Self {
+        RawInteger::Signed(x)
+    }
+}
+
+pub type Integer = Spanned<RawInteger>;
+
+#[derive(Debug, PartialEq)]
+pub struct RawLiteral {
+    pub value: Integer,
+    pub bit_type: BitType,
+}
+
+pub type Literal = Spanned<RawLiteral>;
 
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
 #[derive(Debug, PartialEq)]

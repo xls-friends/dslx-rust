@@ -7,7 +7,8 @@
 pub mod ast;
 
 use ast::{
-    BitType, FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned,
+    BitType, FunctionSignature, Identifier, Literal, Parameter, ParameterList, ParseInput, Span,
+    Spanned,
 };
 use nom::{
     branch::alt,
@@ -17,12 +18,12 @@ use nom::{
     combinator::verify,
     combinator::{map_opt, map_res, not, opt, peek, recognize},
     multi::{many0, separated_list0, separated_list1},
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
 };
 use num_bigint::{BigInt, BigUint};
 
-use crate::ast::Signedness;
+use crate::ast::{Integer, RawLiteral, Signedness};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -232,6 +233,26 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
     );
 
     spanned(preceding_whitespace(alt((explicitly_signed_type, bits)))).parse(input)
+}
+
+/// Parses a literal expression. E.g.,
+///
+/// `u8:12`, `u8:0b00001100`
+///
+/// `s8:128`, `s8:-128`
+///
+/// Uses the bit type to determine which kind of `RawInteger` to parse.
+fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
+    fn parse(input: ParseInput) -> ParseResult<RawLiteral> {
+        let (input, bit_type) = terminated(parse_bit_type, tag_ws(":"))(input)?;
+        let (rest, value): (ParseInput, Integer) = match bit_type.thing.signedness {
+            Signedness::Signed => spanned(parse_signed_integer).parse(input),
+            Signedness::Unsigned => spanned(parse_unsigned_integer).parse(input),
+        }?;
+        Ok((rest, RawLiteral { value, bit_type }))
+    }
+
+    spanned(parse).parse(input)
 }
 
 #[cfg(test)]
