@@ -112,7 +112,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 ///
 /// At most one `_` is allowed between any two digits (to group digits), e.g.:
 ///
-/// `0b100_000`
+/// `0b1000_0001`
 fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
     let prefix = tag_ws("0b");
     let binary_digit1 = take_while1(|c: char| c == '0' || c == '1');
@@ -146,9 +146,13 @@ fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
 /// `0x1f`,
 /// `0xaB3`
 ///
-/// TODO support _ in literals
+/// At most one `_` is allowed between any two digits (to group digits), e.g.:
+///
+/// `0x10_01`
 fn parse_unsigned_hexadecimal(input: ParseInput) -> ParseResult<BigUint> {
-    map_opt(preceded(tag_ws("0x"), hex_digit1), |s| {
+    let prefix = tag_ws("0x");
+    let separated_digits = recognize(separated_list1(char('_'), hex_digit1));
+    map_opt(preceded(prefix, separated_digits), |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 16)
     })
     .parse(input)
@@ -542,6 +546,18 @@ mod tests {
         // accepts whitespace
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new(" 0x1")).unwrap();
         assert_eq!(num, BigUint::from_u128(1).unwrap());
+
+        // Allow _ between digits...
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xa_b_c_d")).unwrap();
+        assert_eq!(num, BigUint::from_u128(0xabcd).unwrap());
+        // but not leading _
+        parse_unsigned_hexadecimal(ParseInput::new("_0x1")).expect_err("");
+        parse_unsigned_hexadecimal(ParseInput::new("0x_1")).expect_err("");
+        // and not trailing _
+        // all_consuming tells us if parse_unsigned_hexadecimal consumed the _
+        all_consuming(parse_unsigned_hexadecimal)(ParseInput::new("0x1_")).expect_err("");
+        // and not more than 1 in a row
+        all_consuming(parse_unsigned_hexadecimal)(ParseInput::new("0x1__0")).expect_err("");
 
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x0")).unwrap();
         assert_eq!(num, BigUint::from_u128(0).unwrap());
