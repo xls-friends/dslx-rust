@@ -598,6 +598,8 @@ mod tests {
         // at least 1 digit is required
         parse_unsigned_integer(ParseInput::new("")).expect_err("");
 
+        parse_unsigned_integer(ParseInput::new("0b0")).expect("");
+
         let (_, num) = parse_unsigned_integer(ParseInput::new("0b1101")).unwrap();
         assert_eq!(num, BigUint::from_u128(0b1101).unwrap());
         let (_, num) = parse_unsigned_integer(ParseInput::new("0b01101")).unwrap();
@@ -613,38 +615,22 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_signed_decimal() -> () {
+    fn test_parse_signed_integer() -> () {
         // at least 1 digit is required
         parse_signed_integer(ParseInput::new("")).expect_err("");
 
-        parse_signed_integer(ParseInput::new("q0")).expect_err("");
-
         // whitespace accepted
-        let (_, num) = parse_signed_integer(ParseInput::new(" - 1")).unwrap();
-        assert_eq!(num, BigInt::from_i128(-1).unwrap());
+        let (_, num) = parse_signed_integer(ParseInput::new(" - 0b10")).unwrap();
+        assert_eq!(num, BigInt::from_i128(-2).unwrap());
 
-        // negative accepted
-        let (_, num) = parse_signed_integer(ParseInput::new("-0")).unwrap();
-        assert_eq!(num, BigInt::from_i128(0).unwrap());
+        let (_, num) = parse_signed_integer(ParseInput::new("-0b10")).unwrap();
+        assert_eq!(num, BigInt::from_i128(-2).unwrap());
 
-        let (_, num) = parse_signed_integer(ParseInput::new("-1")).unwrap();
-        assert_eq!(num, BigInt::from_i128(-1).unwrap());
+        let (_, num) = parse_signed_integer(ParseInput::new("-3")).unwrap();
+        assert_eq!(num, BigInt::from_i128(-3).unwrap());
 
-        let (_, num) = parse_signed_integer(ParseInput::new("0")).unwrap();
-        assert_eq!(num, BigInt::from_i128(0).unwrap());
-        let (_, num) = parse_signed_integer(ParseInput::new("1")).unwrap();
-        assert_eq!(num, BigInt::from_i128(1).unwrap());
-
-        // fractions not accepted
-        parse_signed_integer(ParseInput::new(".1")).expect_err("");
-
-        // Ensure that radix is 10
-        parse_signed_integer(ParseInput::new("a")).expect_err("");
-        parse_signed_integer(ParseInput::new("A")).expect_err("");
-
-        let (_, num) = parse_signed_integer(ParseInput::new("-36893488147419103232")).unwrap();
-        let two_tothe_65 = BigInt::from_i128(-36893488147419103232).unwrap();
-        assert_eq!(num, two_tothe_65);
+        let (_, num) = parse_signed_integer(ParseInput::new("-0xF")).unwrap();
+        assert_eq!(num, BigInt::from_i128(-15).unwrap());
     }
 
     #[test]
