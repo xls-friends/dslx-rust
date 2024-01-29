@@ -179,9 +179,9 @@ fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
 
 /// Parses a bit type. E.g.:
 ///
-/// `bits[3]`
-/// `uN[3]`
 /// `u3`
+/// `uN[3]`
+/// `bits[3]`
 ///
 /// `s3`
 /// `sN[3]`
@@ -215,7 +215,6 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
         (Signedness::Unsigned, x)
     });
 
-    // TODO update tests to handle the 3 new forms
     spanned(preceding_whitespace(alt((explicitly_signed_type, bits)))).parse(input)
 }
 
@@ -570,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_literal_type() -> () {
+    fn parse_bit_type_shorthand() -> () {
         // must start with s or u
         parse_bit_type(ParseInput::new("")).expect_err("");
         parse_bit_type(ParseInput::new("1")).expect_err("");
@@ -580,10 +579,11 @@ mod tests {
         parse_bit_type(ParseInput::new(" s 1 ")).expect_err("");
         parse_bit_type(ParseInput::new(" u 1 ")).expect_err("");
 
+        // whitespace accepted before
         parse_bit_type(ParseInput::new(" s1 ")).expect("");
         parse_bit_type(ParseInput::new(" u1 ")).expect("");
 
-        // TODO what to do about 0 width? error or ok?
+        // 0 bits is accepted
         parse_bit_type(ParseInput::new("s0")).expect("");
         parse_bit_type(ParseInput::new("u0")).expect("");
 
@@ -610,5 +610,99 @@ mod tests {
         parse_bit_type(ParseInput::new("s64")).expect("");
         parse_bit_type(ParseInput::new("u65")).expect_err("");
         parse_bit_type(ParseInput::new("s65")).expect_err("");
+    }
+
+    #[test]
+    fn parse_bit_type_n_brackets() -> () {
+        // no space after {s,u}
+        parse_bit_type(ParseInput::new("u N[1]")).expect_err("");
+        parse_bit_type(ParseInput::new("s N[1]")).expect_err("");
+
+        // whitespace accepted before
+        parse_bit_type(ParseInput::new(" uN[1] ")).expect("");
+        parse_bit_type(ParseInput::new(" sN[1] ")).expect("");
+
+        // 0 bits is accepted
+        parse_bit_type(ParseInput::new("sN[0]")).expect("");
+        parse_bit_type(ParseInput::new("uN[0]")).expect("");
+
+        let (_, r) = parse_bit_type(ParseInput::new("sN[1]")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Signed,
+                width: Usize(1)
+            }
+        );
+
+        let (_, r) = parse_bit_type(ParseInput::new("uN[1]")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(1)
+            }
+        );
+
+        // 2^(32)-1 is largest valid
+        let (_, r) = parse_bit_type(ParseInput::new("sN[4294967295]")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Signed,
+                width: Usize(4294967295)
+            }
+        );
+        let (_, r) = parse_bit_type(ParseInput::new("uN[4294967295]")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(4294967295)
+            }
+        );
+
+        // 2^32 is too big
+        parse_bit_type(ParseInput::new("uN[4294967296]")).expect_err("");
+        parse_bit_type(ParseInput::new("sN[4294967296]")).expect_err("");
+    }
+
+    #[test]
+    fn parse_bit_type_bits() -> () {
+        // no space in the middle
+        parse_bit_type(ParseInput::new("b its[3]")).expect_err("");
+        parse_bit_type(ParseInput::new("bi ts[3]")).expect_err("");
+        parse_bit_type(ParseInput::new("bit s[3]")).expect_err("");
+        parse_bit_type(ParseInput::new("bits [3]")).expect_err("");
+        parse_bit_type(ParseInput::new("bits[ 3]")).expect_err(""); //TODO is this space acceptable?
+        parse_bit_type(ParseInput::new("bits[3 ]")).expect_err(""); //TODO is this space acceptable?
+
+        // whitespace accepted before
+        parse_bit_type(ParseInput::new(" bits[3] ")).expect("");
+
+        // 0 bits is accepted
+        parse_bit_type(ParseInput::new("bits[0]")).expect("");
+
+        let (_, r) = parse_bit_type(ParseInput::new("bits[1]")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(1)
+            }
+        );
+
+        // 2^(32)-1 is largest valid
+        let (_, r) = parse_bit_type(ParseInput::new("bits[4294967295]")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(4294967295)
+            }
+        );
+
+        // 2^32 is too big
+        parse_bit_type(ParseInput::new("bits[4294967296]")).expect_err("");
     }
 }
