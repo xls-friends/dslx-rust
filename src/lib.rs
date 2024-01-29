@@ -184,17 +184,38 @@ fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
 /// `s8` `s63`
 ///
 /// See <https://google.github.io/xls/dslx_reference/#bit-type>
-fn parse_bit_type_shorthand(input: ParseInput) -> ParseResult<BitType> {
+fn parse_shorthand_bit_type(input: ParseInput) -> ParseResult<BitType> {
     let sign = preceding_whitespace(alt((
         char('s').map(|_| Signedness::Signed),
         char('u').map(|_| Signedness::Unsigned),
     )));
-    let width = verify(
-        map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>()),
+
+    // A base10 integer between [0, 2^32)
+    let decimal_to_2_32 = map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>());
+
+    // `u1` `u16`
+    // `s8` `s63`
+    let shorthand = verify(
+        decimal_to_2_32,
         // "These are defined up to u64."
         |&width| width <= 64,
     );
-    spanned(tuple((sign, width))).parse(input)
+
+    let decimal_to_2_32 = map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>());
+
+    // `uN[1]`
+    let n_brackets = delimited(char('['), decimal_to_2_32, char(']'));
+
+    let explicitly_signed_type = tuple((sign, alt((shorthand, n_brackets))));
+
+    // `bits[256]`
+    let decimal_to_2_32 = map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>());
+    let bits = nom::combinator::map(delimited(tag("bits["), decimal_to_2_32, char(']')), |x| {
+        (Signedness::Unsigned, x)
+    });
+
+    // TODO update tests to handle the 3 new forms
+    spanned(alt((explicitly_signed_type, bits))).parse(input)
 }
 
 #[cfg(test)]
@@ -550,22 +571,22 @@ mod tests {
     #[test]
     fn test_parse_literal_type() -> () {
         // must start with s or u
-        parse_bit_type_shorthand(ParseInput::new("")).expect_err("");
-        parse_bit_type_shorthand(ParseInput::new("1")).expect_err("");
-        parse_bit_type_shorthand(ParseInput::new("a")).expect_err("");
+        parse_shorthand_bit_type(ParseInput::new("")).expect_err("");
+        parse_shorthand_bit_type(ParseInput::new("1")).expect_err("");
+        parse_shorthand_bit_type(ParseInput::new("a")).expect_err("");
 
         // no space after {s,u}
-        parse_bit_type_shorthand(ParseInput::new(" s 1 ")).expect_err("");
-        parse_bit_type_shorthand(ParseInput::new(" u 1 ")).expect_err("");
+        parse_shorthand_bit_type(ParseInput::new(" s 1 ")).expect_err("");
+        parse_shorthand_bit_type(ParseInput::new(" u 1 ")).expect_err("");
 
-        parse_bit_type_shorthand(ParseInput::new(" s1 ")).expect("");
-        parse_bit_type_shorthand(ParseInput::new(" u1 ")).expect("");
+        parse_shorthand_bit_type(ParseInput::new(" s1 ")).expect("");
+        parse_shorthand_bit_type(ParseInput::new(" u1 ")).expect("");
 
         // TODO what to do about 0 width? error or ok?
-        parse_bit_type_shorthand(ParseInput::new("s0")).expect("");
-        parse_bit_type_shorthand(ParseInput::new("u0")).expect("");
+        parse_shorthand_bit_type(ParseInput::new("s0")).expect("");
+        parse_shorthand_bit_type(ParseInput::new("u0")).expect("");
 
-        let (_, r) = parse_bit_type_shorthand(ParseInput::new("s1")).unwrap();
+        let (_, r) = parse_shorthand_bit_type(ParseInput::new("s1")).unwrap();
         assert_eq!(
             r.thing,
             RawBitType {
@@ -574,7 +595,7 @@ mod tests {
             }
         );
 
-        let (_, r) = parse_bit_type_shorthand(ParseInput::new("u1")).unwrap();
+        let (_, r) = parse_shorthand_bit_type(ParseInput::new("u1")).unwrap();
         assert_eq!(
             r.thing,
             RawBitType {
@@ -584,9 +605,9 @@ mod tests {
         );
 
         // 64 is the largest
-        parse_bit_type_shorthand(ParseInput::new("u64")).expect("");
-        parse_bit_type_shorthand(ParseInput::new("s64")).expect("");
-        parse_bit_type_shorthand(ParseInput::new("u65")).expect_err("");
-        parse_bit_type_shorthand(ParseInput::new("s65")).expect_err("");
+        parse_shorthand_bit_type(ParseInput::new("u64")).expect("");
+        parse_shorthand_bit_type(ParseInput::new("s64")).expect("");
+        parse_shorthand_bit_type(ParseInput::new("u65")).expect_err("");
+        parse_shorthand_bit_type(ParseInput::new("s65")).expect_err("");
     }
 }
