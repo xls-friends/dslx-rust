@@ -15,7 +15,7 @@ use nom::{
     character::complete::hex_digit1,
     character::complete::{alpha1, alphanumeric1, char, digit1},
     combinator::verify,
-    combinator::{map_opt, map_res, opt, recognize},
+    combinator::{map_opt, map_res, not, opt, peek, recognize},
     multi::{many0, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
@@ -158,19 +158,26 @@ fn parse_unsigned_hexadecimal(input: ParseInput) -> ParseResult<BigUint> {
     .parse(input)
 }
 
-/// Parses a signed decimal integer of arbitrary length, e.g.:
-///
-/// `0`
-///
-/// `-1`
-///
-/// `42`
-///
-/// `1361129467683753853853498429727072845824`
-fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
+/// Parses an unsigned decimal, hexadecimal, or binary integer.
+fn parse_unsigned_integer(input: ParseInput) -> ParseResult<BigUint> {
+    alt((
+        // If the input starts with `0b` or `0x` we don't want parse_unsigned_decimal to consume
+        // the 0 and stop parsing that the b or x.
+        preceded(
+            not(peek(alt((tag_ws("0b"), tag_ws("0x"))))),
+            parse_unsigned_decimal,
+        ),
+        parse_unsigned_hexadecimal,
+        parse_unsigned_binary,
+    ))
+    .parse(input)
+}
+
+/// Parses a signed decimal, hexadecimal, or binary integer.
+fn parse_signed_integer(input: ParseInput) -> ParseResult<BigInt> {
     let negative = opt(preceding_whitespace(char('-')));
     nom::combinator::map(
-        tuple((negative, parse_unsigned_decimal)),
+        tuple((negative, parse_unsigned_integer)),
         |(neg, bu)| match neg {
             Some(_) => BigInt::from_biguint(num_bigint::Sign::Minus, bu),
             None => BigInt::from_biguint(num_bigint::Sign::Plus, bu),
@@ -587,36 +594,55 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_unsigned_integer() -> () {
+        // at least 1 digit is required
+        parse_unsigned_integer(ParseInput::new("")).expect_err("");
+
+        let (_, num) = parse_unsigned_integer(ParseInput::new("0b1101")).unwrap();
+        assert_eq!(num, BigUint::from_u128(0b1101).unwrap());
+        let (_, num) = parse_unsigned_integer(ParseInput::new("0b01101")).unwrap();
+        assert_eq!(num, BigUint::from_u128(0b01101).unwrap());
+
+        // Ensure that the 0 prefix doesn't cause a failure; the parse doesn't try hex or
+        // binary then completely fail.
+        let (_, num) = parse_unsigned_integer(ParseInput::new("0123456789")).unwrap();
+        assert_eq!(num, BigUint::from_u128(123456789).unwrap());
+
+        let (_, num) = parse_unsigned_integer(ParseInput::new("0xabcdef0123456789")).unwrap();
+        assert_eq!(num, BigUint::from_u128(0xabcdef0123456789).unwrap());
+    }
+
+    #[test]
     fn test_parse_signed_decimal() -> () {
         // at least 1 digit is required
-        parse_signed_decimal(ParseInput::new("")).expect_err("");
+        parse_signed_integer(ParseInput::new("")).expect_err("");
 
-        parse_signed_decimal(ParseInput::new("q0")).expect_err("");
+        parse_signed_integer(ParseInput::new("q0")).expect_err("");
 
         // whitespace accepted
-        let (_, num) = parse_signed_decimal(ParseInput::new(" - 1")).unwrap();
+        let (_, num) = parse_signed_integer(ParseInput::new(" - 1")).unwrap();
         assert_eq!(num, BigInt::from_i128(-1).unwrap());
 
         // negative accepted
-        let (_, num) = parse_signed_decimal(ParseInput::new("-0")).unwrap();
+        let (_, num) = parse_signed_integer(ParseInput::new("-0")).unwrap();
         assert_eq!(num, BigInt::from_i128(0).unwrap());
 
-        let (_, num) = parse_signed_decimal(ParseInput::new("-1")).unwrap();
+        let (_, num) = parse_signed_integer(ParseInput::new("-1")).unwrap();
         assert_eq!(num, BigInt::from_i128(-1).unwrap());
 
-        let (_, num) = parse_signed_decimal(ParseInput::new("0")).unwrap();
+        let (_, num) = parse_signed_integer(ParseInput::new("0")).unwrap();
         assert_eq!(num, BigInt::from_i128(0).unwrap());
-        let (_, num) = parse_signed_decimal(ParseInput::new("1")).unwrap();
+        let (_, num) = parse_signed_integer(ParseInput::new("1")).unwrap();
         assert_eq!(num, BigInt::from_i128(1).unwrap());
 
         // fractions not accepted
-        parse_signed_decimal(ParseInput::new(".1")).expect_err("");
+        parse_signed_integer(ParseInput::new(".1")).expect_err("");
 
         // Ensure that radix is 10
-        parse_signed_decimal(ParseInput::new("a")).expect_err("");
-        parse_signed_decimal(ParseInput::new("A")).expect_err("");
+        parse_signed_integer(ParseInput::new("a")).expect_err("");
+        parse_signed_integer(ParseInput::new("A")).expect_err("");
 
-        let (_, num) = parse_signed_decimal(ParseInput::new("-36893488147419103232")).unwrap();
+        let (_, num) = parse_signed_integer(ParseInput::new("-36893488147419103232")).unwrap();
         let two_tothe_65 = BigInt::from_i128(-36893488147419103232).unwrap();
         assert_eq!(num, two_tothe_65);
     }
