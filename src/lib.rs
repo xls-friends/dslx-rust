@@ -752,7 +752,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_bit_type_bits() -> () {
+    fn test_parse_bit_type_bits() -> () {
         // no spaces allowed inside the token `bits`
         parse_bit_type(ParseInput::new("b its[3]")).expect_err("");
         parse_bit_type(ParseInput::new("bi ts[3]")).expect_err("");
