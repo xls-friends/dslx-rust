@@ -456,20 +456,26 @@ mod tests {
         assert_eq!(num, BigUint::from_u128(1).unwrap());
 
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b11")).unwrap();
-        assert_eq!(num, BigUint::from_u128(3).unwrap());
+        assert_eq!(num, BigUint::from_u128(0b11).unwrap());
 
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b101")).unwrap();
-        assert_eq!(num, BigUint::from_u128(4 + 1).unwrap());
+        assert_eq!(num, BigUint::from_u128(0b101).unwrap());
 
         let (_, num) = parse_unsigned_binary(ParseInput::new(
             "0b1000000000000000000000000000000000000000000000000000000000000000000000000",
         ))
         .unwrap();
-        assert_eq!(num, BigUint::from_u128(1 << 72).unwrap());
+        assert_eq!(
+            num,
+            BigUint::from_u128(
+                0b1000000000000000000000000000000000000000000000000000000000000000000000000
+            )
+            .unwrap()
+        );
 
         // leading zeros are accepted
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b0101")).unwrap();
-        assert_eq!(num, BigUint::from_u128(4 + 1).unwrap());
+        assert_eq!(num, BigUint::from_u128(0b0101).unwrap());
     }
 
     #[test]
@@ -564,20 +570,20 @@ mod tests {
 
         // upper and lowercase hex digits accepted
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xff")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xfF")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xFf")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xFF")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
 
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xabcdef0123456789")).unwrap();
-        assert_eq!(num, BigUint::from_u128(12379813738877118345).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xabcdef0123456789).unwrap());
 
         // leading zeros are accepted
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x0101")).unwrap();
-        assert_eq!(num, BigUint::from_u128(256 + 1).unwrap());
+        assert_eq!(num, BigUint::from_u128(0x0101).unwrap());
     }
 
     #[test]
