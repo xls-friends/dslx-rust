@@ -205,7 +205,11 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
     let decimal_to_2_32 = map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>());
 
     // `N[1]`
-    let n_brackets = delimited(tag("N["), decimal_to_2_32, char(']'));
+    let n_brackets = delimited(
+        tuple((char('N'), preceding_whitespace(char('[')))),
+        preceding_whitespace(decimal_to_2_32),
+        preceding_whitespace(char(']')),
+    );
 
     let explicitly_signed_type = tuple((sign, alt((shorthand, n_brackets))));
 
@@ -618,9 +622,9 @@ mod tests {
         parse_bit_type(ParseInput::new("u N[1]")).expect_err("");
         parse_bit_type(ParseInput::new("s N[1]")).expect_err("");
 
-        // whitespace accepted before
-        parse_bit_type(ParseInput::new(" uN[1] ")).expect("");
-        parse_bit_type(ParseInput::new(" sN[1] ")).expect("");
+        // whitespace allowed between tokens
+        parse_bit_type(ParseInput::new(" uN [ 1 ] ")).expect("");
+        parse_bit_type(ParseInput::new(" sN [ 1 ] ")).expect("");
 
         // 0 bits is accepted
         parse_bit_type(ParseInput::new("sN[0]")).expect("");
@@ -669,13 +673,18 @@ mod tests {
 
     #[test]
     fn parse_bit_type_bits() -> () {
-        // no space in the middle
+        // no spaces allowed inside the token `bits`
         parse_bit_type(ParseInput::new("b its[3]")).expect_err("");
         parse_bit_type(ParseInput::new("bi ts[3]")).expect_err("");
         parse_bit_type(ParseInput::new("bit s[3]")).expect_err("");
-        parse_bit_type(ParseInput::new("bits [3]")).expect_err("");
-        parse_bit_type(ParseInput::new("bits[ 3]")).expect_err(""); //TODO is this space acceptable?
-        parse_bit_type(ParseInput::new("bits[3 ]")).expect_err(""); //TODO is this space acceptable?
+
+        // spaces allowed between tokens
+        parse_bit_type(ParseInput::new("bits [3]")).expect("");
+        parse_bit_type(ParseInput::new("bits[ 3]")).expect("");
+        parse_bit_type(ParseInput::new("bits [ 3]")).expect("");
+        parse_bit_type(ParseInput::new("bits[3 ]")).expect("");
+        parse_bit_type(ParseInput::new("bits[ 3 ]")).expect("");
+        parse_bit_type(ParseInput::new("bits [ 3 ] ")).expect("");
 
         // whitespace accepted before
         parse_bit_type(ParseInput::new(" bits[3] ")).expect("");
