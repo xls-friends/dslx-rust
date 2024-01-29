@@ -213,11 +213,16 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
 
     let explicitly_signed_type = tuple((sign, alt((shorthand, n_brackets))));
 
-    // `bits[256]`
+    // `bits[1]`
     let decimal_to_2_32 = map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>());
-    let bits = nom::combinator::map(delimited(tag("bits["), decimal_to_2_32, char(']')), |x| {
-        (Signedness::Unsigned, x)
-    });
+    let bits = nom::combinator::map(
+        delimited(
+            tuple((tag("bits"), preceding_whitespace(char('[')))),
+            preceding_whitespace(decimal_to_2_32),
+            preceding_whitespace(char(']')),
+        ),
+        |x| (Signedness::Unsigned, x),
+    );
 
     spanned(preceding_whitespace(alt((explicitly_signed_type, bits)))).parse(input)
 }
@@ -579,7 +584,7 @@ mod tests {
         parse_bit_type(ParseInput::new("1")).expect_err("");
         parse_bit_type(ParseInput::new("a")).expect_err("");
 
-        // no space after {s,u}
+        // no spaces allowed inside the token u1 s1
         parse_bit_type(ParseInput::new(" s 1 ")).expect_err("");
         parse_bit_type(ParseInput::new(" u 1 ")).expect_err("");
 
@@ -618,7 +623,7 @@ mod tests {
 
     #[test]
     fn parse_bit_type_n_brackets() -> () {
-        // no space after {s,u}
+        // no spaces allowed inside the token uN, sN
         parse_bit_type(ParseInput::new("u N[1]")).expect_err("");
         parse_bit_type(ParseInput::new("s N[1]")).expect_err("");
 
