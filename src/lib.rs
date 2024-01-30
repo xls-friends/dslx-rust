@@ -164,7 +164,7 @@ fn parse_unsigned_integer(input: ParseInput) -> ParseResult<BigUint> {
     let not_hex_or_binary_tag = not(peek(alt((tag_ws("0b"), tag_ws("0x")))));
     alt((
         // If the input starts with `0b` or `0x` we don't want parse_unsigned_decimal to consume
-        // the 0 and stop parsing that the b or x.
+        // the 0 and stop parsing before the b or x.
         preceded(not_hex_or_binary_tag, parse_unsigned_decimal),
         parse_unsigned_hexadecimal,
         parse_unsigned_binary,
