@@ -173,8 +173,10 @@ fn parse_unsigned_integer(input: ParseInput) -> ParseResult<BigUint> {
 }
 
 /// Parses a signed decimal, hexadecimal, or binary integer.
+///
+/// Does not consume preceding whitespace. The caller should do so.
 fn parse_signed_integer(input: ParseInput) -> ParseResult<BigInt> {
-    let negative = opt(preceding_whitespace(char('-')));
+    let negative = opt(char('-'));
     nom::combinator::map(
         tuple((negative, parse_unsigned_integer)),
         |(neg, bu)| match neg {
@@ -646,8 +648,11 @@ mod tests {
         // at least 1 digit is required
         parse_signed_integer(ParseInput::new("")).expect_err("");
 
+        // preceding whitespace not accepted
+        parse_signed_integer(ParseInput::new(" -b10")).expect_err("");
+
         // whitespace accepted
-        let (_, num) = parse_signed_integer(ParseInput::new(" - 0b10")).unwrap();
+        let (_, num) = parse_signed_integer(ParseInput::new("- 0b10")).unwrap();
         assert_eq!(num, BigInt::from_i128(-2).unwrap());
 
         let (_, num) = parse_signed_integer(ParseInput::new("-0b10")).unwrap();
