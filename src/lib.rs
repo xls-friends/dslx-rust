@@ -13,7 +13,7 @@ use nom::{
     character::complete::hex_digit1,
     character::complete::{alpha1, alphanumeric1, char, digit1},
     combinator::verify,
-    combinator::{map_opt, map_res, not, opt, peek, recognize},
+    combinator::{map_opt, map_res, not, opt, peek, recognize, value},
     multi::{many0, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
@@ -248,6 +248,14 @@ fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
     }
 
     spanned(parse).parse(input)
+}
+
+fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
+    let op = alt((
+        value(RawUnaryOperator::Negate, tag_ws("-")),
+        value(RawUnaryOperator::Invert, tag_ws("!")),
+    ));
+    spanned(op).parse(input)
 }
 
 #[cfg(test)]
@@ -880,5 +888,17 @@ mod tests {
 
         // 2^32 is too big
         parse_literal(ParseInput::new("bits[4294967296]:1")).expect_err("");
+    }
+
+    fn test_parse_unary_operator() -> () {
+        // spaces allowed between tokens
+        parse_unary_operator(ParseInput::new(" - ")).expect("");
+        parse_unary_operator(ParseInput::new(" ! ")).expect("");
+
+        let (_, r) = parse_unary_operator(ParseInput::new("-")).unwrap();
+        assert_eq!(r.thing, RawUnaryOperator::Negate);
+
+        let (_, r) = parse_unary_operator(ParseInput::new("!")).unwrap();
+        assert_eq!(r.thing, RawUnaryOperator::Invert);
     }
 }
