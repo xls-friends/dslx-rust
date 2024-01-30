@@ -232,7 +232,7 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
         |x| (Signedness::Unsigned, x),
     );
 
-    spanned(preceding_whitespace(alt((explicitly_signed_type, bits)))).parse(input)
+    spanned(alt((explicitly_signed_type, bits))).parse(input)
 }
 
 /// Parses a literal expression. E.g.,
