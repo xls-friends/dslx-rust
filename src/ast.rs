@@ -189,6 +189,23 @@ pub struct RawLiteral {
 
 pub type Literal = Spanned<RawLiteral>;
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum RawUnaryOperator {
+    /// `-`, computes the two's complement negation
+    Negate,
+    /// `!`, AKA bit-wise not
+    Invert,
+}
+
+pub type UnaryOperator = Spanned<RawUnaryOperator>;
+
+// TODO(dan) parse expression
+#[derive(Debug, PartialEq)]
+pub enum Expression<'a> {
+    Literal(Literal),
+    Unary(UnaryOperator, &'a Expression<'a>),
+}
+
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
 #[derive(Debug, PartialEq)]
 pub struct Spanned<Thing> {
