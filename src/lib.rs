@@ -257,8 +257,8 @@ fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
 
 fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     let op = alt((
-        value(RawUnaryOperator::Negate, tag_ws("-")),
-        value(RawUnaryOperator::Invert, tag_ws("!")),
+        value(RawUnaryOperator::Negate, tag("-")),
+        value(RawUnaryOperator::Invert, tag("!")),
     ));
     spanned(op).parse(input)
 }
@@ -895,6 +895,7 @@ mod tests {
         parse_literal(ParseInput::new("bits[4294967296]:1")).expect_err("");
     }
 
+    #[test]
     fn test_parse_unary_operator() -> () {
         // spaces allowed between tokens
         parse_unary_operator(ParseInput::new(" - ")).expect("");
