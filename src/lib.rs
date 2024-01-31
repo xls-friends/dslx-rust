@@ -4,6 +4,7 @@
 //! Currently a spooky scary skeleton, but actively being built out.
 //!
 //! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
+#![feature(assert_matches)]
 
 // TODO one day when all functions in this file are used, delete below. For now, we prefer to
 // avoid spammy Github Actions notes about unused functions.
@@ -290,13 +291,16 @@ fn parse_expression(input: ParseInput) -> ParseResult<Expression> {
 
 #[cfg(test)]
 mod tests {
+    use std::assert_matches::assert_matches;
+
     use nom::combinator::all_consuming;
     use nom_locate::LocatedSpan;
 
     use num_traits::cast::FromPrimitive;
 
     use crate::ast::{
-        Parameter, RawBitType, RawFunctionSignature, RawIdentifier, RawParameter, Usize,
+        Parameter, RawBitType, RawExpression, RawFunctionSignature, RawIdentifier, RawParameter,
+        Usize,
     };
 
     use super::*;
@@ -946,5 +950,37 @@ mod tests {
 
         let (_, r) = parse_unary_operator(ParseInput::new("!")).unwrap();
         assert_eq!(r.thing, RawUnaryOperator::Invert);
+    }
+
+    #[test]
+    fn test_parse_unary_expression() -> () {
+        // a lone operator is not an expression
+        all_consuming(parse_unary_expression)(ParseInput::new("!")).expect_err("");
+        all_consuming(parse_unary_expression)(ParseInput::new("-")).expect_err("");
+
+        // literal is not unary expression
+        all_consuming(parse_unary_expression)(ParseInput::new("u1:1")).expect_err("");
+
+        all_consuming(parse_unary_expression)(ParseInput::new("!u1:1")).expect("");
+        all_consuming(parse_unary_expression)(ParseInput::new("-u1:1")).expect("");
+
+        // accepts whitespace
+        all_consuming(parse_unary_expression)(ParseInput::new(" - u1 : 1")).expect("");
+
+        let (_, r) = all_consuming(parse_unary_expression)(ParseInput::new("-u1:1")).unwrap();
+        assert_eq!(r.0.thing, RawUnaryOperator::Negate);
+        assert_matches!(r.1.thing, RawExpression::Literal(_));
+
+        let (_, r) = all_consuming(parse_unary_expression)(ParseInput::new("!u1:1")).unwrap();
+        assert_eq!(r.0.thing, RawUnaryOperator::Invert);
+        assert_matches!(r.1.thing, RawExpression::Literal(_));
+
+        // negate is the outer expression
+        let (_, r) = all_consuming(parse_unary_expression)(ParseInput::new("-!u1:1")).unwrap();
+        assert_eq!(r.0.thing, RawUnaryOperator::Negate);
+        assert_matches!(r.1.thing, RawExpression::Unary(_, _));
+        if let RawExpression::Unary(Spanned { span: _, thing }, _) = r.1.thing {
+            assert_matches!(thing, RawUnaryOperator::Invert);
+        };
     }
 }
