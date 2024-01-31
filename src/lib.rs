@@ -273,6 +273,14 @@ fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     spanned(op).parse(input)
 }
 
+fn parse_unary_expression(input: ParseInput) -> ParseResult<(UnaryOperator, Expression)> {
+    tuple((parse_unary_operator, parse_expression)).parse(input)
+}
+
+fn parse_expression(input: ParseInput) -> ParseResult<Expression> {
+    alt((spanned(parse_literal), spanned(parse_unary_expression))).parse(input)
+}
+
 #[cfg(test)]
 mod tests {
     use nom::combinator::all_consuming;

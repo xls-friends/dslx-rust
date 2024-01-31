@@ -199,12 +199,27 @@ pub enum RawUnaryOperator {
 
 pub type UnaryOperator = Spanned<RawUnaryOperator>;
 
-// TODO(dan) parse expression
 #[derive(Debug, PartialEq)]
-pub enum Expression<'a> {
+pub enum RawExpression {
     Literal(Literal),
-    Unary(UnaryOperator, &'a Expression<'a>),
+
+    /// a unary expression, e.g. `!s4:0b1001`
+    Unary(UnaryOperator, Box<Expression>),
 }
+
+impl From<Literal> for RawExpression {
+    fn from(x: Literal) -> Self {
+        RawExpression::Literal(x)
+    }
+}
+
+impl From<(UnaryOperator, Expression)> for RawExpression {
+    fn from((x, y): (UnaryOperator, Expression)) -> Self {
+        RawExpression::Unary(x, Box::new(y))
+    }
+}
+
+pub type Expression = Spanned<RawExpression>;
 
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
 #[derive(Debug, PartialEq)]
