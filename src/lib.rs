@@ -265,6 +265,7 @@ fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
     spanned(parse).parse(input)
 }
 
+/// Parses a unary operator. I.e. `!` and `-`
 fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     let op = alt((
         value(RawUnaryOperator::Negate, tag("-")),
@@ -273,10 +274,16 @@ fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     spanned(op).parse(input)
 }
 
+/// Parses a unary expression. E.g.,
+///
+/// `-u1:1`, `!u1:1`
 fn parse_unary_expression(input: ParseInput) -> ParseResult<(UnaryOperator, Expression)> {
     tuple((parse_unary_operator, parse_expression)).parse(input)
 }
 
+/// Parses an expression. E.g.,
+///
+/// `u1:1`, `!u1:1`, `!!u1:1`
 fn parse_expression(input: ParseInput) -> ParseResult<Expression> {
     alt((spanned(parse_literal), spanned(parse_unary_expression))).parse(input)
 }
