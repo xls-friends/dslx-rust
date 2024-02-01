@@ -284,6 +284,12 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
     let op = alt((
         value(RawBinaryOperator::BitwiseOr, tag("|")),
         value(RawBinaryOperator::BitwiseAnd, tag("&")),
+        value(RawBinaryOperator::Add, tag("+")),
+        value(RawBinaryOperator::Subtract, tag("-")),
+        value(RawBinaryOperator::BitwiseXor, tag("^")),
+        value(RawBinaryOperator::Multiply, tag("*")),
+        value(RawBinaryOperator::BooleanOr, tag("||")),
+        value(RawBinaryOperator::BooleanAnd, tag("&&")),
     ));
     spanned(op).parse(input)
 }

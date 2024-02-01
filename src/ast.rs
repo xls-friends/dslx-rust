@@ -211,6 +211,18 @@ pub enum RawBinaryOperator {
     BitwiseOr,
     /// `&`, bit-wise and
     BitwiseAnd,
+    /// `+`, add
+    Add,
+    /// `-`, subtract
+    Subtract,
+    /// `^`, bit-wise xor
+    BitwiseXor,
+    /// `*`, multiply
+    Multiply,
+    /// `||`, boolean or
+    BooleanOr,
+    /// `&&`, boolean and
+    BooleanAnd,
 }
 
 pub type BinaryOperator = Spanned<RawBinaryOperator>;
