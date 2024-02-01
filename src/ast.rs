@@ -71,6 +71,8 @@ pub struct RawIdentifier<'a> {
     pub name: &'a str,
 }
 
+pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
+
 impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
     fn from(span: ParseInput<'a>) -> Self {
         RawIdentifier {
@@ -86,6 +88,9 @@ pub struct RawParameter<'a> {
     pub param_type: Identifier<'a>,
 }
 
+pub type Parameter<'a> = Spanned<RawParameter<'a>>;
+pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
+
 impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawParameter<'a> {
     fn from((name, param_type): (Identifier<'a>, Identifier<'a>)) -> Self {
         RawParameter { name, param_type }
@@ -100,6 +105,8 @@ pub struct RawFunctionSignature<'a> {
     pub result_type: Identifier<'a>,
 }
 
+pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
+
 impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFunctionSignature<'a> {
     fn from(
         (name, parameters, result_type): (Identifier<'a>, ParameterList<'a>, Identifier<'a>),
@@ -112,14 +119,49 @@ impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFuncti
     }
 }
 
+/// Indicates a signed or unsigned integer
+#[derive(Debug, PartialEq)]
+pub enum Signedness {
+    Signed,
+    Unsigned,
+}
+
+/// Values that turn into array dimensions (AKA bit widths) all become this.
+///
+/// See https://github.com/google/xls/issues/450 to understand why we have this type, instead
+/// of just using `u32` to store bit widths.
+#[derive(Debug, PartialEq)]
+pub struct Usize(pub u32);
+
+/// The "variable length bit type" is "The most fundamental type in DSLX". It has a width (AKA
+/// length) and signedness. E.g.:
+///
+/// `u16` is 16 bits and unsigned
+///
+/// `s8` is 8 bits and signed
+///
+/// See <https://google.github.io/xls/dslx_reference/#bit-type>
+#[derive(Debug, PartialEq)]
+pub struct RawBitType {
+    pub signedness: Signedness,
+    /// width, in bits
+    pub width: Usize,
+}
+
+pub type BitType = Spanned<RawBitType>;
+
+impl<'a> From<(Signedness, u32)> for RawBitType {
+    fn from((signedness, width): (Signedness, u32)) -> Self {
+        RawBitType {
+            signedness,
+            width: Usize(width),
+        }
+    }
+}
+
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
 #[derive(Debug, PartialEq)]
 pub struct Spanned<Thing> {
     pub span: Span,
     pub thing: Thing,
 }
-
-pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
-pub type Parameter<'a> = Spanned<RawParameter<'a>>;
-pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
-pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;

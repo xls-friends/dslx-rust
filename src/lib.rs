@@ -6,17 +6,21 @@
 //! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
 pub mod ast;
 
-use ast::{FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned};
+use ast::{
+    BitType, FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned,
+};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while},
     character::complete::{alpha1, alphanumeric1, char, digit1},
-    combinator::{opt, recognize},
+    combinator::{map_opt, map_res, opt, recognize, verify},
     multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
 };
 use num_bigint::{BigInt, BigUint};
+
+use crate::ast::Signedness;
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -110,7 +114,7 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 /// `1361129467683753853853498429727072845824`
 fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
     let digits = preceding_whitespace(digit1);
-    nom::combinator::map_opt(digits, |s| {
+    map_opt(digits, |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 10)
     })
     .parse(input)
@@ -137,13 +141,35 @@ fn parse_signed_decimal(input: ParseInput) -> ParseResult<BigInt> {
     .parse(input)
 }
 
+/// Parses a shorthand bit type. E.g.:
+///
+/// `u1` `u16`
+///
+/// `s8` `s63`
+///
+/// See <https://google.github.io/xls/dslx_reference/#bit-type>
+fn parse_bit_type_shorthand(input: ParseInput) -> ParseResult<BitType> {
+    let sign = preceding_whitespace(alt((
+        char('s').map(|_| Signedness::Signed),
+        char('u').map(|_| Signedness::Unsigned),
+    )));
+    let width = verify(
+        map_res(digit1, |s: ParseInput| s.fragment().parse::<u32>()),
+        // "These are defined up to u64."
+        |&width| width <= 64,
+    );
+    spanned(tuple((sign, width))).parse(input)
+}
+
 #[cfg(test)]
 mod tests {
     use nom_locate::LocatedSpan;
 
     use num_traits::cast::FromPrimitive;
 
-    use crate::ast::{Parameter, RawFunctionSignature, RawIdentifier, RawParameter};
+    use crate::ast::{
+        Parameter, RawBitType, RawFunctionSignature, RawIdentifier, RawParameter, Usize,
+    };
 
     use super::*;
 
@@ -395,5 +421,48 @@ mod tests {
         let (_, num) = parse_signed_decimal(ParseInput::new("-36893488147419103232")).unwrap();
         let two_tothe_65 = BigInt::from_i128(-36893488147419103232).unwrap();
         assert_eq!(num, two_tothe_65);
+    }
+
+    #[test]
+    fn test_parse_literal_type() -> () {
+        // must start with s or u
+        parse_bit_type_shorthand(ParseInput::new("")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new("1")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new("a")).expect_err("");
+
+        // no space after {s,u}
+        parse_bit_type_shorthand(ParseInput::new(" s 1 ")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new(" u 1 ")).expect_err("");
+
+        parse_bit_type_shorthand(ParseInput::new(" s1 ")).expect("");
+        parse_bit_type_shorthand(ParseInput::new(" u1 ")).expect("");
+
+        // TODO what to do about 0 width? error or ok?
+        parse_bit_type_shorthand(ParseInput::new("s0")).expect("");
+        parse_bit_type_shorthand(ParseInput::new("u0")).expect("");
+
+        let (_, r) = parse_bit_type_shorthand(ParseInput::new("s1")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Signed,
+                width: Usize(1)
+            }
+        );
+
+        let (_, r) = parse_bit_type_shorthand(ParseInput::new("u1")).unwrap();
+        assert_eq!(
+            r.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(1)
+            }
+        );
+
+        // 64 is the largest
+        parse_bit_type_shorthand(ParseInput::new("u64")).expect("");
+        parse_bit_type_shorthand(ParseInput::new("s64")).expect("");
+        parse_bit_type_shorthand(ParseInput::new("u65")).expect_err("");
+        parse_bit_type_shorthand(ParseInput::new("s65")).expect_err("");
     }
 }
