@@ -279,6 +279,15 @@ fn parse_unary_expression(input: ParseInput) -> ParseResult<(UnaryOperator, Expr
     tuple((parse_unary_operator, parse_expression)).parse(input)
 }
 
+/// Parses a binary operator. E.g. `|`, `&`, etc.
+fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
+    let op = alt((
+        value(RawBinaryOperator::BitwiseOr, tag("|")),
+        value(RawBinaryOperator::BitwiseAnd, tag("&")),
+    ));
+    spanned(op).parse(input)
+}
+
 /// Parses an expression. E.g.,
 ///
 /// `u1:1`, `!u1:1`, `!!u1:1`
