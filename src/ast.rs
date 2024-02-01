@@ -121,7 +121,7 @@ impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFuncti
     }
 }
 
-/// Indicates a signed or unsigned integer
+/// Indicates a signed or unsigned integer.
 #[derive(Debug, PartialEq)]
 pub enum Signedness {
     Signed,
