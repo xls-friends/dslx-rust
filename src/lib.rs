@@ -274,9 +274,7 @@ fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     spanned(op).parse(input)
 }
 
-/// Parses a unary expression. E.g.,
-///
-/// `-u1:1`, `!u1:1`
+/// Parses a unary expression. E.g., `-u1:1`, `!u1:1`
 fn parse_unary_expression(input: ParseInput) -> ParseResult<(UnaryOperator, Expression)> {
     tuple((parse_unary_operator, parse_expression)).parse(input)
 }
