@@ -16,7 +16,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, char, digit1},
     combinator::verify,
     combinator::{map_opt, map_res, opt, recognize},
-    multi::{many0, separated_list0},
+    multi::{many0, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, tuple},
     IResult, Parser,
 };
@@ -107,15 +107,17 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 
 /// Parses an unsigned binary integer (including the `0b` prefix) of arbitrary length, e.g.:
 ///
-/// `0b10`
-///
+/// `0b10`,
 /// `0b0011`
 ///
-/// TODO support _ in literals
+/// At most one `_` is allowed between any two digits (to group digits), e.g.:
+///
+/// `0b1000_0001`
 fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
     let prefix = tag_ws("0b");
-    let digits = take_while1(|c: char| c == '0' || c == '1');
-    map_opt(preceded(prefix, digits), |s| {
+    let binary_digit1 = take_while1(|c: char| c == '0' || c == '1');
+    let separated_digits = recognize(separated_list1(char('_'), binary_digit1));
+    map_opt(preceded(prefix, separated_digits), |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 2)
     })
     .parse(input)
@@ -123,17 +125,15 @@ fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
 
 /// Parses an unsigned decimal integer of arbitrary length, e.g.:
 ///
-/// `0`
-///
-/// `1`
-///
-/// `42`
-///
+/// `0`,
+/// `1`,
 /// `1361129467683753853853498429727072845824`
 ///
-/// TODO support _ in literals
+/// At most one `_` is allowed between any two digits (to group digits), e.g.:
+///
+/// `100_000`
 fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
-    let digits = preceding_whitespace(digit1);
+    let digits = preceding_whitespace(recognize(separated_list1(char('_'), digit1)));
     map_opt(digits, |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 10)
     })
@@ -142,15 +142,17 @@ fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
 
 /// Parses an unsigned hexadecimal integer (including the `0x` prefix) of arbitrary length, e.g.:
 ///
-/// `0xAbCd`
-///
-/// `0x1f`
-///
+/// `0xAbCd`,
+/// `0x1f`,
 /// `0xaB3`
 ///
-/// TODO support _ in literals
+/// At most one `_` is allowed between any two digits (to group digits), e.g.:
+///
+/// `0x10_01`
 fn parse_unsigned_hexadecimal(input: ParseInput) -> ParseResult<BigUint> {
-    map_opt(preceded(tag_ws("0x"), hex_digit1), |s| {
+    let prefix = tag_ws("0x");
+    let separated_digits = recognize(separated_list1(char('_'), hex_digit1));
+    map_opt(preceded(prefix, separated_digits), |s| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 16)
     })
     .parse(input)
@@ -229,6 +231,7 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
 
 #[cfg(test)]
 mod tests {
+    use nom::combinator::all_consuming;
     use nom_locate::LocatedSpan;
 
     use num_traits::cast::FromPrimitive;
@@ -437,24 +440,42 @@ mod tests {
         let (_, num) = parse_unsigned_binary(ParseInput::new(" 0b1")).unwrap();
         assert_eq!(num, BigUint::from_u128(1).unwrap());
 
+        // Allow _ between digits...
+        let (_, num) = parse_unsigned_binary(ParseInput::new("0b1_0_1_0")).unwrap();
+        assert_eq!(num, BigUint::from_u128(8 + 2).unwrap());
+        // but not leading _
+        parse_unsigned_binary(ParseInput::new("_0b1")).expect_err("");
+        parse_unsigned_binary(ParseInput::new("0b_1")).expect_err("");
+        // and not trailing _
+        // all_consuming tells us if parse_unsigned_binary consumed the _
+        all_consuming(parse_unsigned_binary)(ParseInput::new("0b1_")).expect_err("");
+        // and not more than 1 in a row
+        all_consuming(parse_unsigned_binary)(ParseInput::new("0b1__0")).expect_err("");
+
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b1")).unwrap();
         assert_eq!(num, BigUint::from_u128(1).unwrap());
 
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b11")).unwrap();
-        assert_eq!(num, BigUint::from_u128(3).unwrap());
+        assert_eq!(num, BigUint::from_u128(0b11).unwrap());
 
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b101")).unwrap();
-        assert_eq!(num, BigUint::from_u128(4 + 1).unwrap());
+        assert_eq!(num, BigUint::from_u128(0b101).unwrap());
 
         let (_, num) = parse_unsigned_binary(ParseInput::new(
             "0b1000000000000000000000000000000000000000000000000000000000000000000000000",
         ))
         .unwrap();
-        assert_eq!(num, BigUint::from_u128(1 << 72).unwrap());
+        assert_eq!(
+            num,
+            BigUint::from_u128(
+                0b1000000000000000000000000000000000000000000000000000000000000000000000000
+            )
+            .unwrap()
+        );
 
         // leading zeros are accepted
         let (_, num) = parse_unsigned_binary(ParseInput::new("0b0101")).unwrap();
-        assert_eq!(num, BigUint::from_u128(4 + 1).unwrap());
+        assert_eq!(num, BigUint::from_u128(0b0101).unwrap());
     }
 
     #[test]
@@ -474,6 +495,17 @@ mod tests {
         // Ensure that radix is 10
         parse_unsigned_decimal(ParseInput::new("a")).expect_err("");
         parse_unsigned_decimal(ParseInput::new("A")).expect_err("");
+
+        // Allow _ between digits...
+        let (_, num) = parse_unsigned_decimal(ParseInput::new("1_2_3_4_5_6_7_8_9")).unwrap();
+        assert_eq!(num, BigUint::from_u128(123456789).unwrap());
+        // but not leading _
+        parse_unsigned_decimal(ParseInput::new("_12")).expect_err("");
+        // and not trailing _
+        // all_consuming tells us if parse_unsigned_decimal consumed the _
+        all_consuming(parse_unsigned_decimal)(ParseInput::new("12_")).expect_err("");
+        // and not more than 1 in a row
+        all_consuming(parse_unsigned_decimal)(ParseInput::new("1__2")).expect_err("");
 
         let (rest, num) = parse_unsigned_decimal(ParseInput::new(" 0a ")).unwrap();
         assert_eq!(num, BigUint::from_u128(0).unwrap());
@@ -521,25 +553,37 @@ mod tests {
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new(" 0x1")).unwrap();
         assert_eq!(num, BigUint::from_u128(1).unwrap());
 
+        // Allow _ between digits...
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xa_b_c_d")).unwrap();
+        assert_eq!(num, BigUint::from_u128(0xabcd).unwrap());
+        // but not leading _
+        parse_unsigned_hexadecimal(ParseInput::new("_0x1")).expect_err("");
+        parse_unsigned_hexadecimal(ParseInput::new("0x_1")).expect_err("");
+        // and not trailing _
+        // all_consuming tells us if parse_unsigned_hexadecimal consumed the _
+        all_consuming(parse_unsigned_hexadecimal)(ParseInput::new("0x1_")).expect_err("");
+        // and not more than 1 in a row
+        all_consuming(parse_unsigned_hexadecimal)(ParseInput::new("0x1__0")).expect_err("");
+
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x0")).unwrap();
         assert_eq!(num, BigUint::from_u128(0).unwrap());
 
         // upper and lowercase hex digits accepted
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xff")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xfF")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xFf")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xFF")).unwrap();
-        assert_eq!(num, BigUint::from_u128(255).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xff).unwrap());
 
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0xabcdef0123456789")).unwrap();
-        assert_eq!(num, BigUint::from_u128(12379813738877118345).unwrap());
+        assert_eq!(num, BigUint::from_u128(0xabcdef0123456789).unwrap());
 
         // leading zeros are accepted
         let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x0101")).unwrap();
-        assert_eq!(num, BigUint::from_u128(256 + 1).unwrap());
+        assert_eq!(num, BigUint::from_u128(0x0101).unwrap());
     }
 
     #[test]
