@@ -223,6 +223,10 @@ pub enum RawBinaryOperator {
     BooleanOr,
     /// `&&`, boolean and
     BooleanAnd,
+    /// `>>`, shift right (both logical and arithmetic, depending on context)
+    ShiftRight,
+    /// `<<`, shift left
+    ShiftLeft,
 }
 
 pub type BinaryOperator = Spanned<RawBinaryOperator>;

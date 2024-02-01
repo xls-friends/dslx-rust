@@ -292,6 +292,8 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
         value(RawBinaryOperator::Subtract, tag("-")),
         value(RawBinaryOperator::BitwiseXor, tag("^")),
         value(RawBinaryOperator::Multiply, tag("*")),
+        value(RawBinaryOperator::ShiftRight, tag(">>")),
+        value(RawBinaryOperator::ShiftLeft, tag("<<")),
     ));
     spanned(op).parse(input)
 }
@@ -1020,5 +1022,9 @@ mod tests {
         assert_eq!(r.thing, RawBinaryOperator::BooleanOr);
         let (_, r) = parse_binary_operator(ParseInput::new("&&")).unwrap();
         assert_eq!(r.thing, RawBinaryOperator::BooleanAnd);
+        let (_, r) = parse_binary_operator(ParseInput::new(">>")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::ShiftRight);
+        let (_, r) = parse_binary_operator(ParseInput::new("<<")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::ShiftLeft);
     }
 }
