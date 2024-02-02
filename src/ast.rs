@@ -207,22 +207,25 @@ pub type UnaryOperator = Spanned<RawUnaryOperator>;
 /// see <https://google.github.io/xls/dslx_reference/#binary-expressions>
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawBinaryOperator {
-    /// `|`, bit-wise or
-    BitwiseOr,
-    /// `&`, bit-wise and
-    BitwiseAnd,
-    /// `+`, add
-    Add,
-    /// `-`, subtract
-    Subtract,
-    /// `^`, bit-wise xor
-    BitwiseXor,
-    /// `*`, multiply
-    Multiply,
     /// `||`, boolean or
     BooleanOr,
     /// `&&`, boolean and
     BooleanAnd,
+
+    /// `|`, bit-wise or
+    BitwiseOr,
+    /// `&`, bit-wise and
+    BitwiseAnd,
+    /// `^`, bit-wise xor
+    BitwiseXor,
+
+    /// `+`, add
+    Add,
+    /// `-`, subtract
+    Subtract,
+    /// `*`, multiply
+    Multiply,
+
     /// `>>`, shift right (both logical and arithmetic, depending on context)
     ShiftRight,
     /// `<<`, shift left
