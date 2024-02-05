@@ -4,6 +4,11 @@
 //! Currently a spooky scary skeleton, but actively being built out.
 //!
 //! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
+
+// TODO one day when all functions in this file are used, delete below. For now, we prefer to
+// avoid spammy Github Actions notes about unused functions.
+#![allow(dead_code)]
+
 pub mod ast;
 
 use ast::*;
