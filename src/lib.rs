@@ -6,10 +6,7 @@
 //! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
 pub mod ast;
 
-use ast::{
-    BitType, FunctionSignature, Identifier, Literal, Parameter, ParameterList, ParseInput, Span,
-    Spanned,
-};
+use ast::*;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
@@ -22,8 +19,6 @@ use nom::{
     IResult, Parser,
 };
 use num_bigint::{BigInt, BigUint};
-
-use crate::ast::{Integer, RawLiteral, Signedness};
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
