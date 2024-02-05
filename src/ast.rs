@@ -152,7 +152,7 @@ pub struct RawBitType {
 
 pub type BitType = Spanned<RawBitType>;
 
-impl<'a> From<(Signedness, u32)> for RawBitType {
+impl From<(Signedness, u32)> for RawBitType {
     fn from((signedness, width): (Signedness, u32)) -> Self {
         RawBitType {
             signedness,
@@ -167,13 +167,13 @@ pub enum RawInteger {
     Signed(BigInt),
 }
 
-impl<'a> From<BigUint> for RawInteger {
+impl From<BigUint> for RawInteger {
     fn from(x: BigUint) -> Self {
         RawInteger::Unsigned(x)
     }
 }
 
-impl<'a> From<BigInt> for RawInteger {
+impl From<BigInt> for RawInteger {
     fn from(x: BigInt) -> Self {
         RawInteger::Signed(x)
     }
