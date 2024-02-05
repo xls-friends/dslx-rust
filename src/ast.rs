@@ -286,9 +286,10 @@ impl RawBinaryOperator {
 }
 
 impl PartialOrd for RawBinaryOperator {
-    /// Implements DSLX binary operator precedence. I.e. x Some(Greater) y means that x is
-    /// higher in the precedence table than y. x None y means they're the same precedence.
-    /// see <https://google.github.io/xls/dslx_reference/#operator-precedence>
+    /// Implements DSLX binary operator precedence. I.e. `x Some(Greater) y` means that x is
+    /// higher in the precedence table than y. `x None y` means they're the same precedence
+    /// (but they're not necessarily equal) see
+    /// <https://google.github.io/xls/dslx_reference/#operator-precedence>
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if PartialEq::eq(self, other) {
             Some(Ordering::Equal)
@@ -369,6 +370,9 @@ pub enum RawExpression {
 
     /// a unary expression, e.g. `!s4:0b1001`
     Unary(UnaryOperator, Box<Expression>),
+
+    /// a binary expression, e.g. `s1:1 + s1:0`
+    Binary(Box<Expression>, BinaryOperator, Box<Expression>),
 }
 
 impl From<Literal> for RawExpression {
@@ -378,8 +382,14 @@ impl From<Literal> for RawExpression {
 }
 
 impl From<(UnaryOperator, Expression)> for RawExpression {
-    fn from((x, y): (UnaryOperator, Expression)) -> Self {
-        RawExpression::Unary(x, Box::new(y))
+    fn from((op, expr): (UnaryOperator, Expression)) -> Self {
+        RawExpression::Unary(op, Box::new(expr))
+    }
+}
+
+impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
+    fn from((lhs, op, rhs): (Expression, BinaryOperator, Expression)) -> Self {
+        RawExpression::Binary(Box::new(lhs), op, Box::new(rhs))
     }
 }
 
