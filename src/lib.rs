@@ -274,11 +274,28 @@ fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     spanned(op).parse(input)
 }
 
-/// Parses a unary expression. E.g.,
-///
-/// `-u1:1`, `!u1:1`
+/// Parses a unary expression. E.g., `-u1:1`, `!u1:1`
 fn parse_unary_expression(input: ParseInput) -> ParseResult<(UnaryOperator, Expression)> {
     tuple((parse_unary_operator, parse_expression)).parse(input)
+}
+
+/// Parses a binary operator. E.g. `|`, `&`, etc.
+fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
+    let op = alt((
+        // These two must be first, else | and & are matched
+        value(RawBinaryOperator::BooleanOr, tag("||")),
+        value(RawBinaryOperator::BooleanAnd, tag("&&")),
+        // now match | and &
+        value(RawBinaryOperator::BitwiseOr, tag("|")),
+        value(RawBinaryOperator::BitwiseAnd, tag("&")),
+        value(RawBinaryOperator::Add, tag("+")),
+        value(RawBinaryOperator::Subtract, tag("-")),
+        value(RawBinaryOperator::BitwiseXor, tag("^")),
+        value(RawBinaryOperator::Multiply, tag("*")),
+        value(RawBinaryOperator::ShiftRight, tag(">>")),
+        value(RawBinaryOperator::ShiftLeft, tag("<<")),
+    ));
+    spanned(op).parse(input)
 }
 
 /// Parses an expression. E.g.,
@@ -981,5 +998,33 @@ mod tests {
         if let RawExpression::Unary(Spanned { span: _, thing }, _) = r.1.thing {
             assert_matches!(thing, RawUnaryOperator::Invert);
         };
+    }
+
+    #[test]
+    fn test_parse_binary_operator() -> () {
+        // spaces allowed between tokens
+        parse_binary_operator(ParseInput::new(" | ")).expect("");
+        parse_binary_operator(ParseInput::new(" & ")).expect("");
+
+        let (_, r) = parse_binary_operator(ParseInput::new("|")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BitwiseOr);
+        let (_, r) = parse_binary_operator(ParseInput::new("&")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BitwiseAnd);
+        let (_, r) = parse_binary_operator(ParseInput::new("+")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Add);
+        let (_, r) = parse_binary_operator(ParseInput::new("-")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Subtract);
+        let (_, r) = parse_binary_operator(ParseInput::new("^")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BitwiseXor);
+        let (_, r) = parse_binary_operator(ParseInput::new("*")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Multiply);
+        let (_, r) = parse_binary_operator(ParseInput::new("||")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BooleanOr);
+        let (_, r) = parse_binary_operator(ParseInput::new("&&")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BooleanAnd);
+        let (_, r) = parse_binary_operator(ParseInput::new(">>")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::ShiftRight);
+        let (_, r) = parse_binary_operator(ParseInput::new("<<")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::ShiftLeft);
     }
 }

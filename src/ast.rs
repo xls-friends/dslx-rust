@@ -189,6 +189,9 @@ pub struct RawLiteral {
 
 pub type Literal = Spanned<RawLiteral>;
 
+/// Operators for unary expressions
+///
+/// see <https://google.github.io/xls/dslx_reference/#unary-expressions>
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawUnaryOperator {
     /// `-`, computes the two's complement negation
@@ -198,6 +201,38 @@ pub enum RawUnaryOperator {
 }
 
 pub type UnaryOperator = Spanned<RawUnaryOperator>;
+
+/// Operators for binary expressions
+///
+/// see <https://google.github.io/xls/dslx_reference/#binary-expressions>
+#[derive(Debug, PartialEq, Clone)]
+pub enum RawBinaryOperator {
+    /// `||`, boolean or
+    BooleanOr,
+    /// `&&`, boolean and
+    BooleanAnd,
+
+    /// `|`, bit-wise or
+    BitwiseOr,
+    /// `&`, bit-wise and
+    BitwiseAnd,
+    /// `^`, bit-wise xor
+    BitwiseXor,
+
+    /// `+`, add
+    Add,
+    /// `-`, subtract
+    Subtract,
+    /// `*`, multiply
+    Multiply,
+
+    /// `>>`, shift right (both logical and arithmetic, depending on context)
+    ShiftRight,
+    /// `<<`, shift left
+    ShiftLeft,
+}
+
+pub type BinaryOperator = Spanned<RawBinaryOperator>;
 
 #[derive(Debug, PartialEq)]
 pub enum RawExpression {
