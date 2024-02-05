@@ -6,9 +6,7 @@
 //! At present, the _only_ entry point is `parse_function_signature`, taking in an ast::ParseInput.
 pub mod ast;
 
-use ast::{
-    BitType, FunctionSignature, Identifier, Parameter, ParameterList, ParseInput, Span, Spanned,
-};
+use ast::*;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
@@ -17,12 +15,10 @@ use nom::{
     combinator::verify,
     combinator::{map_opt, map_res, not, opt, peek, recognize},
     multi::{many0, separated_list0, separated_list1},
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
 };
 use num_bigint::{BigInt, BigUint};
-
-use crate::ast::Signedness;
 
 /// Return type for most parsing functions: takes in ParseInput and returns the `O` type or error.
 type ParseResult<'a, O> = IResult<ParseInput<'a>, O, nom::error::Error<ParseInput<'a>>>;
@@ -232,6 +228,26 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
     );
 
     spanned(preceding_whitespace(alt((explicitly_signed_type, bits)))).parse(input)
+}
+
+/// Parses a literal expression. E.g.,
+///
+/// `u8:12`, `u8:0b00001100`
+///
+/// `s8:128`, `s8:-128`
+///
+/// Uses the bit type to determine which kind of `RawInteger` to parse.
+fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
+    fn parse(input: ParseInput) -> ParseResult<RawLiteral> {
+        let (input, bit_type) = terminated(parse_bit_type, tag_ws(":"))(input)?;
+        let (rest, value): (ParseInput, Integer) = match bit_type.thing.signedness {
+            Signedness::Signed => spanned(parse_signed_integer).parse(input),
+            Signedness::Unsigned => spanned(parse_unsigned_integer).parse(input),
+        }?;
+        Ok((rest, RawLiteral { value, bit_type }))
+    }
+
+    spanned(parse).parse(input)
 }
 
 #[cfg(test)]
@@ -731,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_bit_type_bits() -> () {
+    fn test_parse_bit_type_bits() -> () {
         // no spaces allowed inside the token `bits`
         parse_bit_type(ParseInput::new("b its[3]")).expect_err("");
         parse_bit_type(ParseInput::new("bi ts[3]")).expect_err("");
@@ -772,5 +788,97 @@ mod tests {
 
         // 2^32 is too big
         parse_bit_type(ParseInput::new("bits[4294967296]")).expect_err("");
+    }
+
+    #[test]
+    fn test_parse_literal() -> () {
+        // incomplete is rejected
+        parse_literal(ParseInput::new(":12")).expect_err("");
+        parse_literal(ParseInput::new("u8 12")).expect_err("");
+        parse_literal(ParseInput::new("u8:")).expect_err("");
+
+        // spaces allowed between tokens
+        parse_literal(ParseInput::new(" u8:12 ")).expect("");
+        parse_literal(ParseInput::new(" u8 :12 ")).expect("");
+        parse_literal(ParseInput::new(" u8 : 12 ")).expect("");
+        parse_literal(ParseInput::new(" s8 :- 128 ")).expect("");
+        parse_literal(ParseInput::new(" s8 : -128 ")).expect("");
+        parse_literal(ParseInput::new(" s8 : - 128 ")).expect("");
+
+        // 0 bits is accepted
+        parse_literal(ParseInput::new(" u0 : 0 ")).expect("");
+
+        // unsigned shorthand
+        let (_, r) = parse_literal(ParseInput::new("u8:3")).unwrap();
+        assert_eq!(
+            r.thing.value.thing,
+            ast::RawInteger::Unsigned(BigUint::from_u128(3).unwrap())
+        );
+        assert_eq!(
+            r.thing.bit_type.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(8)
+            }
+        );
+
+        // signed shorthand
+        let (_, r) = parse_literal(ParseInput::new("s51:-5")).unwrap();
+        assert_eq!(
+            r.thing.value.thing,
+            ast::RawInteger::Signed(BigInt::from_i128(-5).unwrap())
+        );
+        assert_eq!(
+            r.thing.bit_type.thing,
+            RawBitType {
+                signedness: Signedness::Signed,
+                width: Usize(51)
+            }
+        );
+
+        // uN[]
+        let (_, r) = parse_literal(ParseInput::new("uN[13]:2")).unwrap();
+        assert_eq!(
+            r.thing.value.thing,
+            ast::RawInteger::Unsigned(BigUint::from_u128(2).unwrap())
+        );
+        assert_eq!(
+            r.thing.bit_type.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(13)
+            }
+        );
+
+        // sN[]
+        let (_, r) = parse_literal(ParseInput::new("sN[7]:-9")).unwrap();
+        assert_eq!(
+            r.thing.value.thing,
+            ast::RawInteger::Signed(BigInt::from_i128(-9).unwrap())
+        );
+        assert_eq!(
+            r.thing.bit_type.thing,
+            RawBitType {
+                signedness: Signedness::Signed,
+                width: Usize(7)
+            }
+        );
+
+        // bits[]
+        let (_, r) = parse_literal(ParseInput::new("bits[17]:11")).unwrap();
+        assert_eq!(
+            r.thing.value.thing,
+            ast::RawInteger::Unsigned(BigUint::from_u128(11).unwrap())
+        );
+        assert_eq!(
+            r.thing.bit_type.thing,
+            RawBitType {
+                signedness: Signedness::Unsigned,
+                width: Usize(17)
+            }
+        );
+
+        // 2^32 is too big
+        parse_literal(ParseInput::new("bits[4294967296]:1")).expect_err("");
     }
 }
