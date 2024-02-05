@@ -114,11 +114,13 @@ fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature>
 /// At most one `_` is allowed between any two digits (to group digits), e.g.:
 ///
 /// `0b1000_0001`
+///
+/// Does not consume preceding whitespace. The caller should do so.
 fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
-    let prefix = tag_ws("0b");
+    let prefix = tag("0b");
     let binary_digit1 = take_while1(|c: char| c == '0' || c == '1');
     let separated_digits = recognize(separated_list1(char('_'), binary_digit1));
-    map_opt(preceded(prefix, separated_digits), |s| {
+    map_opt(preceded(prefix, separated_digits), |s: ParseInput| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 2)
     })
     .parse(input)
@@ -133,9 +135,11 @@ fn parse_unsigned_binary(input: ParseInput) -> ParseResult<BigUint> {
 /// At most one `_` is allowed between any two digits (to group digits), e.g.:
 ///
 /// `100_000`
+///
+/// Does not consume preceding whitespace. The caller should do so.
 fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
-    let digits = preceding_whitespace(recognize(separated_list1(char('_'), digit1)));
-    map_opt(digits, |s| {
+    let digits = recognize(separated_list1(char('_'), digit1));
+    map_opt(digits, |s: ParseInput| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 10)
     })
     .parse(input)
@@ -150,21 +154,25 @@ fn parse_unsigned_decimal(input: ParseInput) -> ParseResult<BigUint> {
 /// At most one `_` is allowed between any two digits (to group digits), e.g.:
 ///
 /// `0x10_01`
+///
+/// Does not consume preceding whitespace. The caller should do so.
 fn parse_unsigned_hexadecimal(input: ParseInput) -> ParseResult<BigUint> {
-    let prefix = tag_ws("0x");
+    let prefix = tag("0x");
     let separated_digits = recognize(separated_list1(char('_'), hex_digit1));
-    map_opt(preceded(prefix, separated_digits), |s| {
+    map_opt(preceded(prefix, separated_digits), |s: ParseInput| {
         BigUint::parse_bytes(s.fragment().as_bytes(), 16)
     })
     .parse(input)
 }
 
 /// Parses an unsigned decimal, hexadecimal, or binary integer.
+///
+/// Does not consume preceding whitespace. The caller should do so.
 fn parse_unsigned_integer(input: ParseInput) -> ParseResult<BigUint> {
-    let not_hex_or_binary_tag = not(peek(alt((tag_ws("0b"), tag_ws("0x")))));
+    let not_hex_or_binary_tag = not(peek(alt((tag("0b"), tag("0x")))));
     alt((
         // If the input starts with `0b` or `0x` we don't want parse_unsigned_decimal to consume
-        // the 0 and stop parsing that the b or x.
+        // the 0 and stop parsing before the b or x.
         preceded(not_hex_or_binary_tag, parse_unsigned_decimal),
         parse_unsigned_hexadecimal,
         parse_unsigned_binary,
@@ -173,10 +181,12 @@ fn parse_unsigned_integer(input: ParseInput) -> ParseResult<BigUint> {
 }
 
 /// Parses a signed decimal, hexadecimal, or binary integer.
+///
+/// Does not consume preceding whitespace. The caller should do so.
 fn parse_signed_integer(input: ParseInput) -> ParseResult<BigInt> {
-    let negative = opt(preceding_whitespace(char('-')));
+    let negative = opt(char('-'));
     nom::combinator::map(
-        tuple((negative, parse_unsigned_integer)),
+        tuple((negative, preceding_whitespace(parse_unsigned_integer))),
         |(neg, bu)| match neg {
             Some(_) => BigInt::from_biguint(num_bigint::Sign::Minus, bu),
             None => BigInt::from_biguint(num_bigint::Sign::Plus, bu),
@@ -232,7 +242,7 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
         |x| (Signedness::Unsigned, x),
     );
 
-    spanned(preceding_whitespace(alt((explicitly_signed_type, bits)))).parse(input)
+    spanned(alt((explicitly_signed_type, bits))).parse(input)
 }
 
 /// Parses a literal expression. E.g.,
@@ -257,8 +267,8 @@ fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
 
 fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     let op = alt((
-        value(RawUnaryOperator::Negate, tag_ws("-")),
-        value(RawUnaryOperator::Invert, tag_ws("!")),
+        value(RawUnaryOperator::Negate, tag("-")),
+        value(RawUnaryOperator::Invert, tag("!")),
     ));
     spanned(op).parse(input)
 }
@@ -470,8 +480,8 @@ mod tests {
         // 0B invalid
         parse_unsigned_binary(ParseInput::new("0B1")).expect_err("");
 
-        // accepts whitespace
-        let (_, num) = parse_unsigned_binary(ParseInput::new(" 0b1")).unwrap();
+        // rejects preceding whitespace
+        let (_, num) = parse_unsigned_binary(ParseInput::new("0b1")).unwrap();
         assert_eq!(num, BigUint::from_u128(1).unwrap());
 
         // Allow _ between digits...
@@ -530,6 +540,9 @@ mod tests {
         parse_unsigned_decimal(ParseInput::new("a")).expect_err("");
         parse_unsigned_decimal(ParseInput::new("A")).expect_err("");
 
+        // rejects preceding whitespace
+        parse_unsigned_decimal(ParseInput::new("A")).expect_err("");
+
         // Allow _ between digits...
         let (_, num) = parse_unsigned_decimal(ParseInput::new("1_2_3_4_5_6_7_8_9")).unwrap();
         assert_eq!(num, BigUint::from_u128(123456789).unwrap());
@@ -541,10 +554,11 @@ mod tests {
         // and not more than 1 in a row
         all_consuming(parse_unsigned_decimal)(ParseInput::new("1__2")).expect_err("");
 
-        let (rest, num) = parse_unsigned_decimal(ParseInput::new(" 0a ")).unwrap();
+        // consumes all digits then stops at the first non digit
+        let (rest, num) = parse_unsigned_decimal(ParseInput::new("0a ")).unwrap();
         assert_eq!(num, BigUint::from_u128(0).unwrap());
         assert_eq!(rest, unsafe {
-            LocatedSpan::new_from_raw_offset(2, 1, "a ", ())
+            LocatedSpan::new_from_raw_offset(1, 1, "a ", ())
         });
 
         let (_, num) = parse_unsigned_decimal(ParseInput::new("1")).unwrap();
@@ -583,8 +597,8 @@ mod tests {
         // 0X invalid
         parse_unsigned_hexadecimal(ParseInput::new("0X1")).expect_err("");
 
-        // accepts whitespace
-        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new(" 0x1")).unwrap();
+        // rejects preceding whitespace
+        let (_, num) = parse_unsigned_hexadecimal(ParseInput::new("0x1")).unwrap();
         assert_eq!(num, BigUint::from_u128(1).unwrap());
 
         // Allow _ between digits...
@@ -646,8 +660,11 @@ mod tests {
         // at least 1 digit is required
         parse_signed_integer(ParseInput::new("")).expect_err("");
 
-        // whitespace accepted
-        let (_, num) = parse_signed_integer(ParseInput::new(" - 0b10")).unwrap();
+        // rejects preceding whitespace
+        parse_signed_integer(ParseInput::new(" -b10")).expect_err("");
+
+        // whitespace accepted after -
+        let (_, num) = parse_signed_integer(ParseInput::new("- 0b10")).unwrap();
         assert_eq!(num, BigInt::from_i128(-2).unwrap());
 
         let (_, num) = parse_signed_integer(ParseInput::new("-0b10")).unwrap();
@@ -816,7 +833,15 @@ mod tests {
         parse_literal(ParseInput::new(" u8 : 12 ")).expect("");
         parse_literal(ParseInput::new(" s8 :- 128 ")).expect("");
         parse_literal(ParseInput::new(" s8 : -128 ")).expect("");
+        parse_literal(ParseInput::new(" u8 : 128 ")).expect("");
+        parse_literal(ParseInput::new(" s8 : 128 ")).expect("");
         parse_literal(ParseInput::new(" s8 : - 128 ")).expect("");
+        parse_literal(ParseInput::new(" u8 : 0xf ")).expect("");
+        parse_literal(ParseInput::new(" s8 : 0xf ")).expect("");
+        parse_literal(ParseInput::new(" s8 : - 0xf ")).expect("");
+        parse_literal(ParseInput::new(" u8 : 0b1 ")).expect("");
+        parse_literal(ParseInput::new(" s8 : 0b1 ")).expect("");
+        parse_literal(ParseInput::new(" s8 : - 0b1 ")).expect("");
 
         // 0 bits is accepted
         parse_literal(ParseInput::new(" u0 : 0 ")).expect("");
@@ -895,6 +920,7 @@ mod tests {
         parse_literal(ParseInput::new("bits[4294967296]:1")).expect_err("");
     }
 
+    #[test]
     fn test_parse_unary_operator() -> () {
         // spaces allowed between tokens
         parse_unary_operator(ParseInput::new(" - ")).expect("");
