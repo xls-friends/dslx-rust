@@ -7,7 +7,7 @@ pub type ParseInput<'a> = nom_locate::LocatedSpan<&'a str>;
 
 // TODO: Move pos/span to own file.
 /// A distinct position in the input: offset from input start, line number, and column within line.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Pos {
     /// Offset from the start of overall parse input in bytes/characters.
     /// Unicode is not _currently_ supported.
@@ -39,7 +39,7 @@ impl From<(usize, usize, usize)> for Pos {
 }
 
 /// Identifies a range of the parser input.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Span {
     pub start: Pos,
     /// Not inclusive, i.e., this represents the first position after the end of the spanned region.
@@ -124,7 +124,7 @@ impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFuncti
 }
 
 /// Indicates a signed or unsigned integer.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Signedness {
     Signed,
     Unsigned,
@@ -134,7 +134,7 @@ pub enum Signedness {
 ///
 /// See https://github.com/google/xls/issues/450 to understand why we have this type, instead
 /// of just using `u32` to store bit widths.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Usize(pub u32);
 
 /// The "variable length bit type" is "The most fundamental type in DSLX". It has a width (AKA
@@ -145,7 +145,7 @@ pub struct Usize(pub u32);
 /// `s8` is 8 bits and signed
 ///
 /// See <https://google.github.io/xls/dslx_reference/#bit-type>
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RawBitType {
     pub signedness: Signedness,
     /// width, in bits
@@ -163,7 +163,7 @@ impl From<(Signedness, u32)> for RawBitType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RawInteger {
     Unsigned(BigUint),
     Signed(BigInt),
@@ -183,7 +183,7 @@ impl From<BigInt> for RawInteger {
 
 pub type Integer = Spanned<RawInteger>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RawLiteral {
     pub value: Integer,
     pub bit_type: BitType,
@@ -364,7 +364,7 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
     Literal(Literal),
 
@@ -396,7 +396,7 @@ impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
 pub type Expression = Spanned<RawExpression>;
 
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Spanned<Thing> {
     pub span: Span,
     pub thing: Thing,

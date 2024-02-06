@@ -18,7 +18,7 @@ use nom::{
     character::complete::hex_digit1,
     character::complete::{alpha1, alphanumeric1, char, digit1},
     combinator::verify,
-    combinator::{map_opt, map_res, not, opt, peek, recognize, value},
+    combinator::{flat_map, map_opt, map_res, not, opt, peek, recognize, success, value},
     multi::{many0, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
@@ -295,7 +295,9 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
 ///
 /// parse_infix_expression handles any and all kinds of expressions that would
 /// left-recursively call parse_expression
-fn parse_infix_expression(input: ParseInput, left: Expression) -> ParseResult<Expression> {
+fn parse_infix_expression<'a>(
+    left: Expression,
+) -> impl FnMut(ParseInput<'a>) -> ParseResult<Expression> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
     //
@@ -303,20 +305,28 @@ fn parse_infix_expression(input: ParseInput, left: Expression) -> ParseResult<Ex
     // lowering' trick found here: https://btmc.substack.com/p/how-to-parse-expressions-easy
     // Like so: right = parse_expression(tokens, get_precedence(op.tag)-1)
 
-    // TODO I'm going to try and use more combinators/less explicit.
-    // TODO use fn flat_map<G, H, O2>(self, g: G) -> FlatMap<Self, G, O>
-    let (rest, start) = position_ws().parse(input)?;
-    let (rest, op) = parse_binary_operator(rest)?;
-    let (rest, right) = parse_expression(rest, Some(op.thing))?;
-    let (_, end) = nom_locate::position(rest)?;
-    let re = RawExpression::from((left, op, right));
-    Ok((
-        rest,
-        Spanned {
-            span: Span::new(start, end),
-            thing: re,
-        },
-    ))
+    // Note: the spanned combinator can't be used here because `left` was passed to us (thus,
+    // spanned can't capture the start).
+    move |input: ParseInput<'a>| -> ParseResult<Expression> {
+        flat_map(parse_binary_operator, |op| {
+            tuple((
+                success(left.clone()),
+                success(op.clone()),
+                parse_expression(Some(op.thing)),
+            ))
+        })
+        .map(|(left, op, right)| {
+            let thing = RawExpression::from((left.clone(), op, right.clone()));
+            Spanned {
+                span: Span {
+                    start: left.span.start,
+                    end: right.span.end,
+                },
+                thing,
+            }
+        })
+        .parse(input)
+    }
 }
 
 /// Parses an expression (e.g. binary, unary, arbitrarily nested expressions), given the
@@ -324,41 +334,42 @@ fn parse_infix_expression(input: ParseInput, left: Expression) -> ParseResult<Ex
 ///
 /// E.g. input=`u1:1 && u1:1`, previous=`Some(||)`, will return the `Expression` `u1:1 && u1:1`
 /// because `&&` has higher precedence than `||`.
-fn parse_expression(
-    input: ParseInput,
+fn parse_expression<'a>(
     previous: Option<RawBinaryOperator>,
-) -> ParseResult<Expression> {
+) -> impl FnMut(ParseInput<'a>) -> ParseResult<Expression> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
 
-    let higher_precedence_than_previous = |current: BinaryOperator| -> bool {
-        match (previous, current.thing) {
-            // when no previous, then we judge current is higher precedence
-            (None, _) => true,
-            (Some(previous), current) => match current.partial_cmp(&previous) {
-                Some(Greater) => true,
-                // no comparison, equal, and less are all judged not higher precedence
-                _ => false,
-            },
-        }
-    };
-
-    // Note: I could not figure out how to do the following using only combinators
-    let (mut rest, mut left) = parse_unary_atomic_expression(input)?;
-    let mut op: Option<BinaryOperator>;
-    loop {
-        (rest, op) = peek(opt(parse_binary_operator))(rest)?;
-        match op {
-            Some(op) => {
-                if higher_precedence_than_previous(op) {
-                    (rest, left) = parse_infix_expression(rest, left)?;
-                } else {
-                    return Ok((rest, left));
-                }
+    move |input: ParseInput<'a>| {
+        let higher_precedence_than_previous = |current: BinaryOperator| -> bool {
+            match (previous, current.thing) {
+                // when no previous, then we judge current is higher precedence
+                (None, _) => true,
+                (Some(previous), current) => match current.partial_cmp(&previous) {
+                    Some(Greater) => true,
+                    // no comparison, equal, and less are all judged not higher precedence
+                    _ => false,
+                },
             }
+        };
 
-            // There is no binary operator following the unary/atomic expression; return now.
-            None => return Ok((rest, left)),
+        // Note: I could not figure out how to do the following using only combinators
+        let (mut rest, mut left) = parse_unary_atomic_expression(input)?;
+        let mut op: Option<BinaryOperator>;
+        loop {
+            (rest, op) = peek(opt(parse_binary_operator))(rest)?;
+            match op {
+                Some(op) => {
+                    if higher_precedence_than_previous(op) {
+                        (rest, left) = parse_infix_expression(left)(rest)?;
+                    } else {
+                        return Ok((rest, left));
+                    }
+                }
+
+                // There is no binary operator following the unary/atomic expression; return now.
+                None => return Ok((rest, left)),
+            }
         }
     }
 }
@@ -397,10 +408,6 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::{
-        Parameter, RawBitType, RawExpression, RawFunctionSignature, RawIdentifier, RawParameter,
-        Usize,
-    };
     use nom::combinator::all_consuming;
     use nom_locate::LocatedSpan;
     use num_traits::cast::FromPrimitive;
@@ -1166,25 +1173,21 @@ mod tests {
     #[test]
     fn test_parse_binary_expression_basic() -> () {
         // spaces allowed between tokens
-        parse_expression(ParseInput::new(" u2 : 1 + u2 : 2 "), None).expect("");
-        parse_expression(ParseInput::new(" u1 : 1 || u1 : 0 "), None).expect("");
+        parse_expression(None)(ParseInput::new(" u2 : 1 + u2 : 2 ")).expect("");
+        parse_expression(None)(ParseInput::new(" u1 : 1 || u1 : 0 ")).expect("");
 
         // no space inside the || token
-        parse_expression(ParseInput::new(" u1 : 1 | | u1 : 0 "), None).expect_err("");
-
-        // TODO we'd like to use all_consuming(parse_expression) but we can't because parse_expression takes 2
-        // args. We need to change it to take just the Option<RawBinaryOperator> argument, then
-        // it returns a parser. That would make the flat_map change easier, I think.
+        parse_expression(None)(ParseInput::new(" u1 : 1 | | u1 : 0 ")).expect_err("");
 
         // unary expressions match
-        let (_, r) = parse_expression(ParseInput::new("-u1:1"), None).unwrap();
+        let (_, r) = all_consuming(parse_expression(None))(ParseInput::new("-u1:1")).unwrap();
         let (op, inner_expr) = expression_is_unary(r);
         assert_eq!(op, RawUnaryOperator::Negate);
         let _ = expression_is_literal(*inner_expr);
 
         // match a few different binary operators
         let (lhs, op, rhs) = expression_is_binary(
-            parse_expression(ParseInput::new("u1:0 * u2:1"), None)
+            all_consuming(parse_expression(None))(ParseInput::new("u1:0 * u2:1"))
                 .unwrap()
                 .1,
         );
@@ -1193,7 +1196,7 @@ mod tests {
         let _ = expression_is_literal(*rhs);
 
         let (lhs, op, rhs) = expression_is_binary(
-            parse_expression(ParseInput::new("u1:0 + u2:1"), None)
+            all_consuming(parse_expression(None))(ParseInput::new("u1:0 + u2:1"))
                 .unwrap()
                 .1,
         );
@@ -1202,7 +1205,7 @@ mod tests {
         let _ = expression_is_literal(*rhs);
 
         let (lhs, op, rhs) = expression_is_binary(
-            parse_expression(ParseInput::new("u1:0 | u2:1"), None)
+            all_consuming(parse_expression(None))(ParseInput::new("u1:0 | u2:1"))
                 .unwrap()
                 .1,
         );
@@ -1211,7 +1214,7 @@ mod tests {
         let _ = expression_is_literal(*rhs);
 
         let (lhs, op, rhs) = expression_is_binary(
-            parse_expression(ParseInput::new("u1:0 || u2:1"), None)
+            all_consuming(parse_expression(None))(ParseInput::new("u1:0 || u2:1"))
                 .unwrap()
                 .1,
         );
@@ -1250,8 +1253,11 @@ mod tests {
             second: RawBinaryOperator,
             loc: FirstsLocation,
         ) -> () {
-            let (lhs, op, rhs) =
-                expression_is_binary(parse_expression(ParseInput::new(s), None).unwrap().1);
+            let (lhs, op, rhs) = expression_is_binary(
+                all_consuming(parse_expression(None))(ParseInput::new(s))
+                    .unwrap()
+                    .1,
+            );
 
             // The operation that occurs second will be outermost
             assert_eq!(op, second);
@@ -1273,12 +1279,6 @@ mod tests {
                 }
             }
         }
-
-        // Tests that precedence of various operators is correct
-
-        // TODO we'd like to use all_consuming(parse_expression) but we can't because parse_expression takes 2
-        // args. We need to change it to take just the Option<RawBinaryOperator> argument, then
-        // it returns a parser. That would make the flat_map change easier, I think.
 
         // multiply is highest
         first_then(
@@ -1330,8 +1330,11 @@ mod tests {
 
         // mul and add in parallel, combine with bitwise AND
         let s = "u1:1 * u1:1 & u1:1 + u1:1";
-        let (lhs, op, rhs) =
-            expression_is_binary(parse_expression(ParseInput::new(s), None).unwrap().1);
+        let (lhs, op, rhs) = expression_is_binary(
+            all_consuming(parse_expression(None))(ParseInput::new(s))
+                .unwrap()
+                .1,
+        );
 
         // The operation that occurs last will be outermost
         assert_eq!(op, RawBinaryOperator::BitwiseAnd);
@@ -1348,5 +1351,22 @@ mod tests {
             let _ = expression_is_literal(*lhs);
             let _ = expression_is_literal(*rhs);
         }
+    }
+
+    // Test that spans are correct
+    #[test]
+    fn test_parse_binary_expression_span() -> () {
+        let (_, r) =
+            all_consuming(parse_expression(None))(ParseInput::new(" u1:0 * u2:1")).unwrap();
+        assert_eq!(r.span, Span::from(((1, 1, 2), (12, 1, 13))));
+
+        let s = " u1:1 * u1:1 & u1:1 + u1:1";
+        let (lhs, _, rhs) = expression_is_binary(
+            all_consuming(parse_expression(None))(ParseInput::new(s))
+                .unwrap()
+                .1,
+        );
+        assert_eq!((*lhs).span, Span::from(((1, 1, 2), (12, 1, 13))));
+        assert_eq!((*rhs).span, Span::from(((15, 1, 16), (26, 1, 27))));
     }
 }
