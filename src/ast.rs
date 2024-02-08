@@ -1,8 +1,11 @@
-use std::cmp::Ordering;
+//! Defines data types and related for the Abstract Syntax Tree.
+//!
+//! Naming convention: RawFoo is the Foo not including the `Span`. Foo will include the `Span`.
 
 use num_bigint::{BigInt, BigUint};
+use std::cmp::Ordering;
 
-// Defines the types in the AST for DSLX.
+/// Defines the types in the AST for DSLX.
 pub type ParseInput<'a> = nom_locate::LocatedSpan<&'a str>;
 
 // TODO: Move pos/span to own file.
@@ -38,7 +41,8 @@ impl From<(usize, usize, usize)> for Pos {
     }
 }
 
-/// Identifies a range of the parser input.
+/// Identifies a range of the parser input. Enables us to track where in the source text some
+/// element originated, so that we can report errors to the user.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Span {
     pub start: Pos,
@@ -68,8 +72,6 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
 }
 
 /// Represents a name of an entity, such as a type, variable, function, etc.
-///
-/// "Raw" means "not spanned".
 #[derive(Debug, PartialEq)]
 pub struct RawIdentifier<'a> {
     pub name: &'a str,
@@ -147,7 +149,9 @@ pub struct Usize(pub u32);
 /// See <https://google.github.io/xls/dslx_reference/#bit-type>
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawBitType {
+    /// a bit type is differentiated on if it's signed or unsigned
     pub signedness: Signedness,
+
     /// width, in bits
     pub width: Usize,
 }
@@ -163,6 +167,7 @@ impl From<(Signedness, u32)> for RawBitType {
     }
 }
 
+/// A (big) integer, tagged Unsigned or Signed.
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawInteger {
     Unsigned(BigUint),
@@ -183,6 +188,7 @@ impl From<BigInt> for RawInteger {
 
 pub type Integer = Spanned<RawInteger>;
 
+/// A literal, e.g. `s4:0b1001`.
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLiteral {
     pub value: Integer,
@@ -364,8 +370,10 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
+/// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
+    /// a literal, e.g. `s4:0b1001`
     Literal(Literal),
 
     /// a unary expression, e.g. `!s4:0b1001`
