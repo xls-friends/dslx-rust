@@ -376,6 +376,10 @@ pub enum RawExpression {
     /// a literal, e.g. `s4:0b1001`
     Literal(Literal),
 
+    /// An expression that's surrounded by an open and close parentheses. The expression inside
+    /// the parentheses will be evaluated with the highest precedence.
+    Parenthesized(Box<Expression>),
+
     /// a unary expression, e.g. `!s4:0b1001`
     Unary(UnaryOperator, Box<Expression>),
 
@@ -386,6 +390,12 @@ pub enum RawExpression {
 impl From<Literal> for RawExpression {
     fn from(x: Literal) -> Self {
         RawExpression::Literal(x)
+    }
+}
+
+impl From<Expression> for RawExpression {
+    fn from(x: Expression) -> Self {
+        RawExpression::Parenthesized(Box::new(x))
     }
 }
 
