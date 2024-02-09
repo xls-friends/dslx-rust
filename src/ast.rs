@@ -87,19 +87,20 @@ impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
     }
 }
 
-/// A parameter to a function, e.g., `foo: MyType`.
+/// Introduces a variable with its name and type, e.g., `foo : MyType`. E.g. used in function
+/// type signature parameter lists, `let` bindings, etc.
 #[derive(Debug, PartialEq)]
-pub struct RawParameter<'a> {
+pub struct RawVariableDeclaration<'a> {
     pub name: Identifier<'a>,
-    pub param_type: Identifier<'a>,
+    pub typ: Identifier<'a>,
 }
 
-pub type Parameter<'a> = Spanned<RawParameter<'a>>;
+pub type Parameter<'a> = Spanned<RawVariableDeclaration<'a>>;
 pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
 
-impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawParameter<'a> {
-    fn from((name, param_type): (Identifier<'a>, Identifier<'a>)) -> Self {
-        RawParameter { name, param_type }
+impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawVariableDeclaration<'a> {
+    fn from((name, typ): (Identifier<'a>, Identifier<'a>)) -> Self {
+        RawVariableDeclaration { name, typ }
     }
 }
 

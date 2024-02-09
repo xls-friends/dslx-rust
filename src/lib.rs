@@ -521,12 +521,12 @@ mod tests {
             p,
             Spanned {
                 span: Span::from(((1, 1, 2), (7, 1, 8))),
-                thing: RawParameter {
+                thing: RawVariableDeclaration {
                     name: Spanned {
                         span: Span::from(((1, 1, 2), (2, 1, 3))),
                         thing: RawIdentifier { name: "x" }
                     },
-                    param_type: Spanned {
+                    typ: Spanned {
                         span: Span::from(((5, 1, 6), (7, 1, 8))),
                         thing: RawIdentifier { name: "u2" }
                     }
@@ -551,12 +551,12 @@ mod tests {
                 thing: vec![
                     Spanned {
                         span: Span::from(((0, 1, 1), (6, 1, 7))),
-                        thing: RawParameter {
+                        thing: RawVariableDeclaration {
                             name: Spanned {
                                 span: Span::from(((0, 1, 1), (1, 1, 2))),
                                 thing: RawIdentifier { name: "x" }
                             },
-                            param_type: Spanned {
+                            typ: Spanned {
                                 span: Span::from(((4, 1, 5), (6, 1, 7))),
                                 thing: RawIdentifier { name: "u2" }
                             }
@@ -564,12 +564,12 @@ mod tests {
                     },
                     Spanned {
                         span: Span::from(((7, 1, 8), (13, 1, 14))),
-                        thing: RawParameter {
+                        thing: RawVariableDeclaration {
                             name: Spanned {
                                 span: Span::from(((7, 1, 8), (8, 1, 9))),
                                 thing: RawIdentifier { name: "y" }
                             },
-                            param_type: Spanned {
+                            typ: Spanned {
                                 span: Span::from(((11, 1, 12), (13, 1, 14))),
                                 thing: RawIdentifier { name: "u4" }
                             }
@@ -595,12 +595,12 @@ mod tests {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
                     thing: vec![Parameter {
                         span: Span::from(((9, 1, 10), (15, 1, 16))),
-                        thing: RawParameter {
+                        thing: RawVariableDeclaration {
                             name: Identifier {
                                 span: Span::from(((9, 1, 10), (10, 1, 11))),
                                 thing: RawIdentifier { name: "x" },
                             },
-                            param_type: Identifier {
+                            typ: Identifier {
                                 span: Span::from(((12, 1, 13), (15, 1, 16))),
                                 thing: RawIdentifier { name: "u32" },
                             },
