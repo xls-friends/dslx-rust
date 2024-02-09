@@ -281,12 +281,17 @@ fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     spanned(op).parse(input)
 }
 
-/// Parses unary and atomic expressions. E.g., `-u1:1`, `u1:1`
+/// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
 fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
     alt((
-        spanned(delimited(tag("("), parse_expression(None), tag_ws(")"))),
+        spanned(delimited(
+            tag("("),
+            parse_expression(None).map(|e| ParenthesizedExpression(e)),
+            tag_ws(")"),
+        )),
+        spanned(parse_let_expression),
         spanned(parse_literal),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
     ))
@@ -330,13 +335,15 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 /// expression after the let (after all, what's the point of declaring a variable binding if
 /// you're never going to use the variable?), but not required. So the trailing expression is
 /// optional.
-fn parse_let_expression(input: ParseInput) -> ParseResult<Expression> {
+fn parse_let_expression(
+    input: ParseInput,
+) -> ParseResult<(VariableDeclaration, Expression, Option<Expression>)> {
     // let must be followed by at least 1 whitespace
     let let_p = terminated(tag_ws("let"), whitespace_exactly1);
     let var_p = delimited(let_p, parse_variable_declaration, tag_ws("="));
     let bound_expr = terminated(parse_expression(None), tag_ws(";"));
     let using_expr = opt(parse_expression(None));
-    spanned(tuple((var_p, bound_expr, using_expr))).parse(input)
+    tuple((var_p, bound_expr, using_expr)).parse(input)
 }
 
 /// Parses a binary operator and the expression that follows it, given the expression preceding

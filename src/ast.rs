@@ -371,6 +371,13 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
+// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
+// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
+// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
+// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParenthesizedExpression(pub Expression);
+
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
@@ -406,8 +413,8 @@ impl From<Literal> for RawExpression {
     }
 }
 
-impl From<Expression> for RawExpression {
-    fn from(x: Expression) -> Self {
+impl From<ParenthesizedExpression> for RawExpression {
+    fn from(ParenthesizedExpression(x): ParenthesizedExpression) -> Self {
         RawExpression::Parenthesized(Box::new(x))
     }
 }
