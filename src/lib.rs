@@ -83,8 +83,8 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
     spanned(p).parse(input)
 }
 
-/// Parses a single param, e.g., `x: u32`.
-fn parse_param(input: ParseInput) -> ParseResult<VariableDeclaration> {
+/// Parses a variable declaration, e.g., `x : u32`.
+fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDeclaration> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -92,17 +92,17 @@ fn parse_param(input: ParseInput) -> ParseResult<VariableDeclaration> {
     .parse(input)
 }
 
-/// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
+/// Parses a comma-separated list of variable declarations, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
-fn parse_param_list0(input: ParseInput) -> ParseResult<VariableDeclarationList> {
-    spanned(separated_list0(tag_ws(","), parse_param))(input)
+fn parse_parameter_list0(input: ParseInput) -> ParseResult<VariableDeclarationList> {
+    spanned(separated_list0(tag_ws(","), parse_variable_declaration))(input)
 }
 
 /// Parses a function signature, e.g.:
 /// `fn foo(a: u32, b: u64) -> uN[128]`
 fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature> {
     let name = preceded(tag_ws("fn"), parse_identifier);
-    let parameters = delimited(tag_ws("("), parse_param_list0, tag_ws(")"));
+    let parameters = delimited(tag_ws("("), parse_parameter_list0, tag_ws(")"));
     let ret_type = preceded(tag_ws("->"), parse_identifier);
     spanned(tuple((name, parameters, ret_type))).parse(input)
 }
@@ -511,8 +511,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_param() -> () {
-        let p = match parse_param(ParseInput::new(" x : u2 ")) {
+    fn test_parse_variable_declaration() -> () {
+        let p = match parse_variable_declaration(ParseInput::new(" x : u2 ")) {
             Ok(x) => x.1,
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -542,8 +542,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_param_list2() -> () {
-        let p = match parse_param_list0(ParseInput::new("x : u2,y : u4")) {
+    fn test_parse_parameter_list0() -> () {
+        let p = match parse_parameter_list0(ParseInput::new("x : u2,y : u4")) {
             Ok(x) => x.1,
             Err(e) => {
                 eprintln!("Error: {}", e);
