@@ -72,7 +72,7 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
 }
 
 /// Represents a name of an entity, such as a type, variable, function, etc.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RawIdentifier {
     pub name: String,
 }
@@ -89,7 +89,7 @@ impl<'a> From<ParseInput<'a>> for RawIdentifier {
 
 /// Introduces a variable with its name and type, e.g., `foo : MyType`. E.g. used in function
 /// type signature parameter lists, `let` bindings, etc.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RawVariableDeclaration {
     pub name: Identifier,
     pub typ: Identifier,
@@ -386,6 +386,8 @@ pub enum RawExpression {
 
     /// a binary expression, e.g. `s1:1 + s1:0`
     Binary(Box<Expression>, BinaryOperator, Box<Expression>),
+
+    Let(VariableDeclaration, Box<Expression>),
 }
 
 impl From<Literal> for RawExpression {
@@ -409,6 +411,12 @@ impl From<(UnaryOperator, Expression)> for RawExpression {
 impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
     fn from((lhs, op, rhs): (Expression, BinaryOperator, Expression)) -> Self {
         RawExpression::Binary(Box::new(lhs), op, Box::new(rhs))
+    }
+}
+
+impl From<(VariableDeclaration, Expression)> for RawExpression {
+    fn from((var, expr): (VariableDeclaration, Expression)) -> Self {
+        RawExpression::Let(var, Box::new(expr))
     }
 }
 

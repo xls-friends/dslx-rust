@@ -16,7 +16,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
     character::complete::hex_digit1,
-    character::complete::{alpha1, alphanumeric1, char, digit1},
+    character::complete::{alpha1, alphanumeric1, char, digit1, satisfy},
     combinator::verify,
     combinator::{flat_map, map_opt, map_res, not, opt, peek, recognize, success, value},
     multi::{many0, separated_list0, separated_list1},
@@ -45,6 +45,11 @@ pub fn tag_ws<'a>(to_match: &'a str) -> impl FnMut(ParseInput<'a>) -> ParseResul
 /// Returns the current position after consuming preceding whitespace.
 pub fn position_ws<'a>() -> impl FnMut(ParseInput<'a>) -> ParseResult<ParseInput<'a>> {
     preceding_whitespace(nom_locate::position)
+}
+
+/// A parser that consumes exactly 1 whitespace character.
+pub fn whitespace_exactly1(input: ParseInput) -> ParseResult<()> {
+    value((), satisfy(|c: char| c.is_whitespace())).parse(input)
 }
 
 /// Returns a parser that captures the span encompassing the entirety of the given parser's
@@ -317,6 +322,15 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
         value(RawBinaryOperator::Less, tag("<")),
     ));
     spanned(op).parse(input)
+}
+
+/// Parses a let expression. E.g. `let x : u32 = a + u32:1; x`
+fn parse_let_expression(input: ParseInput) -> ParseResult<Expression> {
+    //let must be terminated by 1 whitespace
+    let let_p = terminated(tag_ws("let"), whitespace_exactly1);
+    let var_p = delimited(let_p, parse_variable_declaration, tag_ws("="));
+    let expr = terminated(parse_expression(None), tag_ws(";"));
+    spanned(tuple((var_p, expr))).parse(input)
 }
 
 /// Parses a binary operator and the expression that follows it, given the expression preceding
