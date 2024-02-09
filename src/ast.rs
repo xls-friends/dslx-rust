@@ -73,16 +73,16 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
 
 /// Represents a name of an entity, such as a type, variable, function, etc.
 #[derive(Debug, PartialEq)]
-pub struct RawIdentifier<'a> {
-    pub name: &'a str,
+pub struct RawIdentifier {
+    pub name: String,
 }
 
-pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
+pub type Identifier = Spanned<RawIdentifier>;
 
-impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
+impl<'a> From<ParseInput<'a>> for RawIdentifier {
     fn from(span: ParseInput<'a>) -> Self {
         RawIdentifier {
-            name: span.fragment(),
+            name: (*span.fragment()).to_owned(),
         }
     }
 }
@@ -90,39 +90,33 @@ impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
 /// Introduces a variable with its name and type, e.g., `foo : MyType`. E.g. used in function
 /// type signature parameter lists, `let` bindings, etc.
 #[derive(Debug, PartialEq)]
-pub struct RawVariableDeclaration<'a> {
-    pub name: Identifier<'a>,
-    pub typ: Identifier<'a>,
+pub struct RawVariableDeclaration {
+    pub name: Identifier,
+    pub typ: Identifier,
 }
 
-pub type VariableDeclaration<'a> = Spanned<RawVariableDeclaration<'a>>;
-pub type VariableDeclarationList<'a> = Spanned<Vec<VariableDeclaration<'a>>>;
+pub type VariableDeclaration = Spanned<RawVariableDeclaration>;
+pub type VariableDeclarationList = Spanned<Vec<VariableDeclaration>>;
 
-impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawVariableDeclaration<'a> {
-    fn from((name, typ): (Identifier<'a>, Identifier<'a>)) -> Self {
+impl From<(Identifier, Identifier)> for RawVariableDeclaration {
+    fn from((name, typ): (Identifier, Identifier)) -> Self {
         RawVariableDeclaration { name, typ }
     }
 }
 
 /// A function signature, e.g: `fn foo(x:u32) -> u32`.
 #[derive(Debug, PartialEq)]
-pub struct RawFunctionSignature<'a> {
-    pub name: Identifier<'a>,
-    pub parameters: VariableDeclarationList<'a>,
-    pub result_type: Identifier<'a>,
+pub struct RawFunctionSignature {
+    pub name: Identifier,
+    pub parameters: VariableDeclarationList,
+    pub result_type: Identifier,
 }
 
-pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
+pub type FunctionSignature = Spanned<RawFunctionSignature>;
 
-impl<'a> From<(Identifier<'a>, VariableDeclarationList<'a>, Identifier<'a>)>
-    for RawFunctionSignature<'a>
-{
+impl From<(Identifier, VariableDeclarationList, Identifier)> for RawFunctionSignature {
     fn from(
-        (name, parameters, result_type): (
-            Identifier<'a>,
-            VariableDeclarationList<'a>,
-            Identifier<'a>,
-        ),
+        (name, parameters, result_type): (Identifier, VariableDeclarationList, Identifier),
     ) -> Self {
         RawFunctionSignature {
             name,
