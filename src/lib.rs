@@ -287,6 +287,37 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     .parse(input)
 }
 
+/// Parses a binary operator. E.g. `|`, `&`, etc.
+fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
+    let op = alt((
+        // These two must match before | and &
+        value(RawBinaryOperator::BooleanOr, tag("||")),
+        value(RawBinaryOperator::BooleanAnd, tag("&&")),
+        // now match | and &
+        value(RawBinaryOperator::BitwiseOr, tag("|")),
+        value(RawBinaryOperator::BitwiseAnd, tag("&")),
+        value(RawBinaryOperator::BitwiseXor, tag("^")),
+        // concatenate must match before +
+        value(RawBinaryOperator::Concatenate, tag("++")),
+        // the order of these does not matter
+        // arithmetic
+        value(RawBinaryOperator::Add, tag("+")),
+        value(RawBinaryOperator::Subtract, tag("-")),
+        value(RawBinaryOperator::Multiply, tag("*")),
+        // shift
+        value(RawBinaryOperator::ShiftRight, tag(">>")),
+        value(RawBinaryOperator::ShiftLeft, tag("<<")),
+        // compare
+        value(RawBinaryOperator::Equal, tag("==")),
+        value(RawBinaryOperator::NotEqual, tag("!=")),
+        value(RawBinaryOperator::GreaterOrEqual, tag(">=")),
+        value(RawBinaryOperator::Greater, tag(">")),
+        value(RawBinaryOperator::LessOrEqual, tag("<=")),
+        value(RawBinaryOperator::Less, tag("<")),
+    ));
+    spanned(op).parse(input)
+}
+
 /// Parses a binary operator and the expression that follows it, given the expression preceding
 /// the operator, returning all of this is a binary `Expression`.
 ///
@@ -371,37 +402,6 @@ fn parse_expression<'a>(
             }
         }
     }
-}
-
-/// Parses a binary operator. E.g. `|`, `&`, etc.
-fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
-    let op = alt((
-        // These two must match before | and &
-        value(RawBinaryOperator::BooleanOr, tag("||")),
-        value(RawBinaryOperator::BooleanAnd, tag("&&")),
-        // now match | and &
-        value(RawBinaryOperator::BitwiseOr, tag("|")),
-        value(RawBinaryOperator::BitwiseAnd, tag("&")),
-        value(RawBinaryOperator::BitwiseXor, tag("^")),
-        // concatenate must match before +
-        value(RawBinaryOperator::Concatenate, tag("++")),
-        // the order of these does not matter
-        // arithmetic
-        value(RawBinaryOperator::Add, tag("+")),
-        value(RawBinaryOperator::Subtract, tag("-")),
-        value(RawBinaryOperator::Multiply, tag("*")),
-        // shift
-        value(RawBinaryOperator::ShiftRight, tag(">>")),
-        value(RawBinaryOperator::ShiftLeft, tag("<<")),
-        // compare
-        value(RawBinaryOperator::Equal, tag("==")),
-        value(RawBinaryOperator::NotEqual, tag("!=")),
-        value(RawBinaryOperator::GreaterOrEqual, tag(">=")),
-        value(RawBinaryOperator::Greater, tag(">")),
-        value(RawBinaryOperator::LessOrEqual, tag("<=")),
-        value(RawBinaryOperator::Less, tag("<")),
-    ));
-    spanned(op).parse(input)
 }
 
 #[cfg(test)]
