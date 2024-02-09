@@ -1566,7 +1566,6 @@ mod tests {
 
     #[test]
     fn test_parse_let_expression() -> () {
-        // TODO currently broken because identifiers are not allowed in expressions.
         let s = r"let a: u32 = u32:1 * u32:2;
         a & a";
         let (vd, bound_expr, using_expr) = expression_is_let(
@@ -1581,18 +1580,18 @@ mod tests {
         let (_, op, _) = expression_is_binary(*using_expr.unwrap());
         assert_eq!(op, RawBinaryOperator::BitwiseAnd);
 
-        let s = r"let b: u32 = u32:1 + u32:2;
-        let c: u32 = b + u32:3;
-        c";
+        let s = r"let b: u16 = u16:1 + u16:2;
+        let c: u16 = u16:3;";
         let (vd, bound_expr, using_expr) = expression_is_let(
             all_consuming(parse_expression(None))(ParseInput::new(s))
                 .unwrap()
                 .1,
         );
         assert_eq!(vd.name.thing.name, "b");
-        assert_eq!(vd.typ.thing.name, "u32");
+        assert_eq!(vd.typ.thing.name, "u16");
         let (_, op, _) = expression_is_binary(*bound_expr);
         assert_eq!(op, RawBinaryOperator::Add);
-        expression_is_let(*using_expr.unwrap()); // we won't inspect the `let c...` expression any further
+        let (_vd, _bound_exprr, using_expr) = expression_is_let(*using_expr.unwrap());
+        assert_eq!(using_expr, None);
     }
 }
