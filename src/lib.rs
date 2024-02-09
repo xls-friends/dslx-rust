@@ -95,6 +95,7 @@ fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDeclarat
 /// Parses a comma-separated list of variable declarations, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
 fn parse_parameter_list0(input: ParseInput) -> ParseResult<VariableDeclarationList> {
+    // TODO C++ DSLX allows a single trailing comma. Parse/allow that here.
     spanned(separated_list0(tag_ws(","), parse_variable_declaration))(input)
 }
 
