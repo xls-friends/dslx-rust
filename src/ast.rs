@@ -387,7 +387,17 @@ pub enum RawExpression {
     /// a binary expression, e.g. `s1:1 + s1:0`
     Binary(Box<Expression>, BinaryOperator, Box<Expression>),
 
-    Let(VariableDeclaration, Box<Expression>),
+    /// A let expression is:
+    /// * a name bound to a...
+    /// * value (i.e. expression), followed by
+    /// * an expression that (presumably) uses the bound variable
+    ///
+    /// This last is optional; when absent, the value of the let expression is `()`.
+    Let(
+        VariableDeclaration,
+        Box<Expression>,
+        Option<Box<Expression>>,
+    ),
 }
 
 impl From<Literal> for RawExpression {
@@ -414,9 +424,11 @@ impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
     }
 }
 
-impl From<(VariableDeclaration, Expression)> for RawExpression {
-    fn from((var, expr): (VariableDeclaration, Expression)) -> Self {
-        RawExpression::Let(var, Box::new(expr))
+impl From<(VariableDeclaration, Expression, Option<Expression>)> for RawExpression {
+    fn from(
+        (var, bound_expr, using_expr): (VariableDeclaration, Expression, Option<Expression>),
+    ) -> Self {
+        RawExpression::Let(var, Box::new(bound_expr), using_expr.map(|x| Box::new(x)))
     }
 }
 

@@ -325,12 +325,18 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 }
 
 /// Parses a let expression. E.g. `let x : u32 = a + u32:1; x`
+///
+/// Note the trailing expression `x`. It is part of the let expression. It is common to have an
+/// expression after the let (after all, what's the point of declaring a variable binding if
+/// you're never going to use the variable?), but not required. So the trailing expression is
+/// optional.
 fn parse_let_expression(input: ParseInput) -> ParseResult<Expression> {
-    //let must be terminated by 1 whitespace
+    // let must be followed by at least 1 whitespace
     let let_p = terminated(tag_ws("let"), whitespace_exactly1);
     let var_p = delimited(let_p, parse_variable_declaration, tag_ws("="));
-    let expr = terminated(parse_expression(None), tag_ws(";"));
-    spanned(tuple((var_p, expr))).parse(input)
+    let bound_expr = terminated(parse_expression(None), tag_ws(";"));
+    let using_expr = opt(parse_expression(None));
+    spanned(tuple((var_p, bound_expr, using_expr))).parse(input)
 }
 
 /// Parses a binary operator and the expression that follows it, given the expression preceding
@@ -430,7 +436,7 @@ mod tests {
     fn expression_is_literal(x: Expression) -> RawLiteral {
         match x.thing {
             RawExpression::Literal(Spanned { span: _, thing }) => thing,
-            _ => panic!("wrong"),
+            _ => panic!("wasn't literal expression"),
         }
     }
 
@@ -438,7 +444,7 @@ mod tests {
     fn expression_is_unary(x: Expression) -> (RawUnaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Unary(Spanned { span: _, thing }, expr) => (thing, expr),
-            _ => panic!("wrong"),
+            _ => panic!("wasn't unary expression"),
         }
     }
 
@@ -448,7 +454,7 @@ mod tests {
     ) -> (Box<Expression>, RawBinaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Binary(lhs, Spanned { span: _, thing: op }, rhs) => (lhs, op, rhs),
-            _ => panic!("wrong"),
+            _ => panic!("wasn't binary expression"),
         }
     }
 
@@ -456,7 +462,21 @@ mod tests {
     fn expression_is_parenthesized(x: Expression) -> Box<Expression> {
         match x.thing {
             RawExpression::Parenthesized(b) => b,
-            _ => panic!("wrong"),
+            _ => panic!("wasn't parenthesized expression"),
+        }
+    }
+
+    // Panics if Expression is not the correct case
+    fn expression_is_let(
+        x: Expression,
+    ) -> (
+        RawVariableDeclaration,
+        Box<Expression>,
+        Option<Box<Expression>>,
+    ) {
+        match x.thing {
+            RawExpression::Let(Spanned { span: _, thing: vd }, e1, e2) => (vd, e1, e2),
+            _ => panic!("wasn't let expression"),
         }
     }
 
