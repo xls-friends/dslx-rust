@@ -95,8 +95,8 @@ pub struct RawVariableDeclaration<'a> {
     pub typ: Identifier<'a>,
 }
 
-pub type Parameter<'a> = Spanned<RawVariableDeclaration<'a>>;
-pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
+pub type VariableDeclaration<'a> = Spanned<RawVariableDeclaration<'a>>;
+pub type VariableDeclarationList<'a> = Spanned<Vec<VariableDeclaration<'a>>>;
 
 impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawVariableDeclaration<'a> {
     fn from((name, typ): (Identifier<'a>, Identifier<'a>)) -> Self {
@@ -108,15 +108,21 @@ impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawVariableDeclaration<'a> {
 #[derive(Debug, PartialEq)]
 pub struct RawFunctionSignature<'a> {
     pub name: Identifier<'a>,
-    pub parameters: ParameterList<'a>,
+    pub parameters: VariableDeclarationList<'a>,
     pub result_type: Identifier<'a>,
 }
 
 pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
 
-impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFunctionSignature<'a> {
+impl<'a> From<(Identifier<'a>, VariableDeclarationList<'a>, Identifier<'a>)>
+    for RawFunctionSignature<'a>
+{
     fn from(
-        (name, parameters, result_type): (Identifier<'a>, ParameterList<'a>, Identifier<'a>),
+        (name, parameters, result_type): (
+            Identifier<'a>,
+            VariableDeclarationList<'a>,
+            Identifier<'a>,
+        ),
     ) -> Self {
         RawFunctionSignature {
             name,

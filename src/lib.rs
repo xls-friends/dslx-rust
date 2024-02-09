@@ -84,7 +84,7 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
 }
 
 /// Parses a single param, e.g., `x: u32`.
-fn parse_param(input: ParseInput) -> ParseResult<Parameter> {
+fn parse_param(input: ParseInput) -> ParseResult<VariableDeclaration> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -94,7 +94,7 @@ fn parse_param(input: ParseInput) -> ParseResult<Parameter> {
 
 /// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
-fn parse_param_list0(input: ParseInput) -> ParseResult<ParameterList> {
+fn parse_param_list0(input: ParseInput) -> ParseResult<VariableDeclarationList> {
     spanned(separated_list0(tag_ws(","), parse_param))(input)
 }
 
@@ -591,9 +591,9 @@ mod tests {
                     span: Span::from(((3, 1, 4), (8, 1, 9))),
                     thing: RawIdentifier { name: "add_1" },
                 },
-                parameters: ParameterList {
+                parameters: VariableDeclarationList {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
-                    thing: vec![Parameter {
+                    thing: vec![VariableDeclaration {
                         span: Span::from(((9, 1, 10), (15, 1, 16))),
                         thing: RawVariableDeclaration {
                             name: Identifier {
