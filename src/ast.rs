@@ -73,17 +73,13 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
 
 /// Represents a name of an entity, such as a type, variable, function, etc.
 #[derive(Debug, PartialEq, Clone)]
-pub struct RawIdentifier {
-    pub name: String,
-}
+pub struct RawIdentifier(pub String);
 
 pub type Identifier = Spanned<RawIdentifier>;
 
 impl<'a> From<ParseInput<'a>> for RawIdentifier {
     fn from(span: ParseInput<'a>) -> Self {
-        RawIdentifier {
-            name: (*span.fragment()).to_owned(),
-        }
+        RawIdentifier((*span.fragment()).to_owned())
     }
 }
 

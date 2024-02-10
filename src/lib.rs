@@ -543,9 +543,7 @@ mod tests {
                     unsafe { LocatedSpan::new_from_raw_offset(10, 1, "! ", (),) },
                     Spanned {
                         span: Span::from(((1, 1, 2), (10, 1, 11))),
-                        thing: RawIdentifier {
-                            name: "_foo23Bar".to_owned()
-                        }
+                        thing: RawIdentifier("_foo23Bar".to_owned())
                     }
                 ),
             ),
@@ -572,15 +570,11 @@ mod tests {
                 thing: RawVariableDeclaration {
                     name: Spanned {
                         span: Span::from(((1, 1, 2), (2, 1, 3))),
-                        thing: RawIdentifier {
-                            name: "x".to_owned()
-                        }
+                        thing: RawIdentifier("x".to_owned())
                     },
                     typ: Spanned {
                         span: Span::from(((5, 1, 6), (7, 1, 8))),
-                        thing: RawIdentifier {
-                            name: "u2".to_owned()
-                        }
+                        thing: RawIdentifier("u2".to_owned())
                     }
                 }
             }
@@ -606,15 +600,11 @@ mod tests {
                         thing: RawVariableDeclaration {
                             name: Spanned {
                                 span: Span::from(((0, 1, 1), (1, 1, 2))),
-                                thing: RawIdentifier {
-                                    name: "x".to_owned()
-                                }
+                                thing: RawIdentifier("x".to_owned())
                             },
                             typ: Spanned {
                                 span: Span::from(((4, 1, 5), (6, 1, 7))),
-                                thing: RawIdentifier {
-                                    name: "u2".to_owned()
-                                }
+                                thing: RawIdentifier("u2".to_owned())
                             }
                         }
                     },
@@ -623,15 +613,11 @@ mod tests {
                         thing: RawVariableDeclaration {
                             name: Spanned {
                                 span: Span::from(((7, 1, 8), (8, 1, 9))),
-                                thing: RawIdentifier {
-                                    name: "y".to_owned()
-                                }
+                                thing: RawIdentifier("y".to_owned())
                             },
                             typ: Spanned {
                                 span: Span::from(((11, 1, 12), (13, 1, 14))),
-                                thing: RawIdentifier {
-                                    name: "u4".to_owned()
-                                }
+                                thing: RawIdentifier("u4".to_owned())
                             }
                         }
                     }
@@ -649,9 +635,7 @@ mod tests {
             thing: RawFunctionSignature {
                 name: Identifier {
                     span: Span::from(((3, 1, 4), (8, 1, 9))),
-                    thing: RawIdentifier {
-                        name: "add_1".to_owned(),
-                    },
+                    thing: RawIdentifier("add_1".to_owned()),
                 },
                 parameters: VariableDeclarationList {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
@@ -660,24 +644,18 @@ mod tests {
                         thing: RawVariableDeclaration {
                             name: Identifier {
                                 span: Span::from(((9, 1, 10), (10, 1, 11))),
-                                thing: RawIdentifier {
-                                    name: "x".to_owned(),
-                                },
+                                thing: RawIdentifier("x".to_owned()),
                             },
                             typ: Identifier {
                                 span: Span::from(((12, 1, 13), (15, 1, 16))),
-                                thing: RawIdentifier {
-                                    name: "u32".to_owned(),
-                                },
+                                thing: RawIdentifier("u32".to_owned()),
                             },
                         },
                     }],
                 },
                 result_type: Identifier {
                     span: Span::from(((20, 1, 21), (23, 1, 24))),
-                    thing: RawIdentifier {
-                        name: "u16".to_owned(),
-                    },
+                    thing: RawIdentifier("u16".to_owned()),
                 },
             },
         };
