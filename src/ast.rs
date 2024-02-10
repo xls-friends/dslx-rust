@@ -381,8 +381,12 @@ pub struct ParenthesizedExpression(pub Expression);
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
-    /// a literal, e.g. `s4:0b1001`
+    /// A literal, e.g. `s4:0b1001`
     Literal(Literal),
+
+    /// A variable, e.g. `x`. A name bound to a value (e.g. by a previous `let` expression, or
+    /// a function argument).
+    Variable(Identifier),
 
     /// An expression that's surrounded by an open and close parentheses. The expression inside
     /// the parentheses will be evaluated with the highest precedence.
@@ -410,6 +414,12 @@ pub enum RawExpression {
 impl From<Literal> for RawExpression {
     fn from(x: Literal) -> Self {
         RawExpression::Literal(x)
+    }
+}
+
+impl From<Identifier> for RawExpression {
+    fn from(x: Identifier) -> Self {
+        RawExpression::Variable(x)
     }
 }
 

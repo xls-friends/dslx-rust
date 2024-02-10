@@ -294,6 +294,7 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
         spanned(parse_let_expression),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
         spanned(parse_literal),
+        spanned(parse_identifier),
     ))
     .parse(input)
 }
