@@ -281,24 +281,6 @@ fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     spanned(op).parse(input)
 }
 
-/// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
-fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
-    // this implementation follows the 'Top Down Operator Precedence' algorithm. See
-    // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
-    alt((
-        spanned(delimited(
-            tag("("),
-            parse_expression(None).map(|e| ParenthesizedExpression(e)),
-            tag_ws(")"),
-        )),
-        spanned(parse_let_expression),
-        spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
-        spanned(parse_literal),
-        spanned(parse_identifier),
-    ))
-    .parse(input)
-}
-
 /// Parses a binary operator. E.g. `|`, `&`, etc.
 fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
     let op = alt((
@@ -348,6 +330,24 @@ fn parse_let_expression(
     let bound_expr = terminated(parse_expression(None), tag_ws(";"));
     let using_expr = opt(parse_expression(None));
     tuple((var_decl, bound_expr, using_expr)).parse(input)
+}
+
+/// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
+fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
+    // this implementation follows the 'Top Down Operator Precedence' algorithm. See
+    // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
+    alt((
+        spanned(delimited(
+            tag("("),
+            parse_expression(None).map(|e| ParenthesizedExpression(e)),
+            tag_ws(")"),
+        )),
+        spanned(parse_let_expression),
+        spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
+        spanned(parse_literal),
+        spanned(parse_identifier),
+    ))
+    .parse(input)
 }
 
 /// Parses a binary operator and the expression that follows it, given the expression preceding
