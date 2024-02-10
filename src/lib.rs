@@ -1556,6 +1556,7 @@ mod tests {
 
     #[test]
     fn test_parse_let_expression() -> () {
+        // test the first variable decl, and the using expression
         let s = r"let a: u32 = u32:1 * u32:2;
         a & a";
         let (bindings, using_expr) = expression_is_let(
@@ -1576,6 +1577,7 @@ mod tests {
         let (_, op, _) = expression_is_binary(*using_expr.unwrap());
         assert_eq!(op, RawBinaryOperator::BitwiseAnd);
 
+        // test two bindings, and no using expression.
         let s = r"let b: u16 = u16:1 + u16:2;
         let c: u8 = u16:3;";
         let (bindings, using_expr) = expression_is_let(
@@ -1584,11 +1586,11 @@ mod tests {
                 .1,
         );
         assert_eq!(
-            bindings.first().thing.variable_declaration.thing.name.thing,
+            bindings[0].thing.variable_declaration.thing.name.thing,
             RawIdentifier("b".to_owned())
         );
         assert_eq!(
-            bindings.first().thing.variable_declaration.thing.typ.thing,
+            bindings[0].thing.variable_declaration.thing.typ.thing,
             RawIdentifier("u16".to_owned())
         );
         assert_eq!(
