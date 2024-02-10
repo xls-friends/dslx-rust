@@ -328,6 +328,11 @@ fn parse_let_expression(
         tag_ws("="),
     );
     let bound_expr = terminated(parse_expression(None), tag_ws(";"));
+    // TODO consider a non-recursive method parsing of `let`, because
+    // "Less recursive implementation so you get less stack overflows when fuzzing"
+    // For example, consider greedily parsing an (uninterrupted) sequence of let expressions,
+    // followed by 0 or 1 non-let expressions. We could still stick them into a recursive
+    // Expression data structure without stack overflowing.
     let using_expr = opt(parse_expression(None));
     tuple((var_decl, bound_expr, using_expr)).parse(input)
 }
