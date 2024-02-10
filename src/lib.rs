@@ -19,10 +19,11 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, char, digit1, satisfy},
     combinator::verify,
     combinator::{flat_map, map_opt, map_res, not, opt, peek, recognize, success, value},
-    multi::{many0, separated_list0, separated_list1},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
 };
+use nonempty::NonEmpty;
 use num_bigint::{BigInt, BigUint};
 use std::cmp::Ordering::Greater;
 
@@ -320,21 +321,33 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 /// optional.
 fn parse_let_expression(
     input: ParseInput,
-) -> ParseResult<(VariableDeclaration, Expression, Option<Expression>)> {
-    let var_decl = delimited(
-        // let must be followed by at least 1 whitespace
-        tuple((tag_ws("let"), whitespace_exactly1)),
-        parse_variable_declaration,
-        tag_ws("="),
-    );
-    let bound_expr = terminated(parse_expression(None), tag_ws(";"));
-    // TODO consider a non-recursive method parsing of `let`, because
-    // "Less recursive implementation so you get less stack overflows when fuzzing"
-    // For example, consider greedily parsing an (uninterrupted) sequence of let expressions,
-    // followed by 0 or 1 non-let expressions. We could still stick them into a recursive
-    // Expression data structure without stack overflowing.
+) -> ParseResult<(NonEmpty<LetBinding>, Option<Expression>)> {
+    fn parse_let_binding(input: ParseInput) -> ParseResult<RawLetBinding> {
+        let var_decl = delimited(
+            // let must be followed by at least 1 whitespace
+            tuple((tag_ws("let"), whitespace_exactly1)),
+            parse_variable_declaration,
+            tag_ws("="),
+        );
+        let bound_expr = terminated(parse_expression(None), tag_ws(";"));
+        tuple((var_decl, bound_expr))
+            .map(|(variable_declaration, value)| RawLetBinding {
+                variable_declaration,
+                value: Box::new(value),
+            })
+            .parse(input)
+    }
+
+    // We avoid a recursive parsing implementation of nested let expressions to avoid stack
+    // overflows when fuzzing.
+    let bindings = many1(spanned(parse_let_binding)).map(|xs| {
+        let mut ys = NonEmpty::new(xs.first().unwrap().clone());
+        ys.extend(xs.iter().skip(1).cloned());
+        ys
+    });
+
     let using_expr = opt(parse_expression(None));
-    tuple((var_decl, bound_expr, using_expr)).parse(input)
+    tuple((bindings, using_expr)).parse(input)
 }
 
 /// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
@@ -483,15 +496,9 @@ mod tests {
     }
 
     // Panics if Expression is not the correct case
-    fn expression_is_let(
-        x: Expression,
-    ) -> (
-        RawVariableDeclaration,
-        Box<Expression>,
-        Option<Box<Expression>>,
-    ) {
+    fn expression_is_let(x: Expression) -> (NonEmpty<LetBinding>, Option<Box<Expression>>) {
         match x.thing {
-            RawExpression::Let(Spanned { span: _, thing: vd }, e1, e2) => (vd, e1, e2),
+            RawExpression::Let(xs, e) => (xs, e),
             _ => panic!("wasn't let expression"),
         }
     }
@@ -1551,30 +1558,50 @@ mod tests {
     fn test_parse_let_expression() -> () {
         let s = r"let a: u32 = u32:1 * u32:2;
         a & a";
-        let (vd, bound_expr, using_expr) = expression_is_let(
+        let (bindings, using_expr) = expression_is_let(
             all_consuming(parse_expression(None))(ParseInput::new(s))
                 .unwrap()
                 .1,
         );
-        assert_eq!(vd.name.thing.name, "a");
-        assert_eq!(vd.typ.thing.name, "u32");
-        let (_, op, _) = expression_is_binary(*bound_expr);
+        assert_eq!(
+            bindings.first().thing.variable_declaration.thing.name.thing,
+            RawIdentifier("a".to_owned())
+        );
+        assert_eq!(
+            bindings.first().thing.variable_declaration.thing.typ.thing,
+            RawIdentifier("u32".to_owned())
+        );
+        let (_, op, _) = expression_is_binary(*bindings.first().thing.value.clone());
         assert_eq!(op, RawBinaryOperator::Multiply);
         let (_, op, _) = expression_is_binary(*using_expr.unwrap());
         assert_eq!(op, RawBinaryOperator::BitwiseAnd);
 
         let s = r"let b: u16 = u16:1 + u16:2;
-        let c: u16 = u16:3;";
-        let (vd, bound_expr, using_expr) = expression_is_let(
+        let c: u8 = u16:3;";
+        let (bindings, using_expr) = expression_is_let(
             all_consuming(parse_expression(None))(ParseInput::new(s))
                 .unwrap()
                 .1,
         );
-        assert_eq!(vd.name.thing.name, "b");
-        assert_eq!(vd.typ.thing.name, "u16");
-        let (_, op, _) = expression_is_binary(*bound_expr);
+        assert_eq!(
+            bindings.first().thing.variable_declaration.thing.name.thing,
+            RawIdentifier("b".to_owned())
+        );
+        assert_eq!(
+            bindings.first().thing.variable_declaration.thing.typ.thing,
+            RawIdentifier("u16".to_owned())
+        );
+        assert_eq!(
+            bindings[1].thing.variable_declaration.thing.name.thing,
+            RawIdentifier("c".to_owned())
+        );
+        assert_eq!(
+            bindings[1].thing.variable_declaration.thing.typ.thing,
+            RawIdentifier("u8".to_owned())
+        );
+        let (_, op, _) = expression_is_binary(*bindings.first().thing.value.clone());
         assert_eq!(op, RawBinaryOperator::Add);
-        let (_vd, _bound_exprr, using_expr) = expression_is_let(*using_expr.unwrap());
+        let _ = expression_is_literal(*bindings[1].thing.value.clone());
         assert_eq!(using_expr, None);
     }
 }

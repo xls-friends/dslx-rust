@@ -2,6 +2,7 @@
 //!
 //! Naming convention: RawFoo is the Foo not including the `Span`. Foo will include the `Span`.
 
+use nonempty::NonEmpty;
 use num_bigint::{BigInt, BigUint};
 use std::cmp::Ordering;
 
@@ -367,6 +368,15 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
+/// *Part* of a let binding: the variable declaration and value it is bound to. What is missing
+/// is the expression in which the bound name is in-scope.
+#[derive(Debug, PartialEq, Clone)]
+pub struct RawLetBinding {
+    pub variable_declaration: VariableDeclaration,
+    pub value: Box<Expression>,
+}
+pub type LetBinding = Spanned<RawLetBinding>;
+
 // This struct exists to ensure that `From<Expression> for RawExpression` does not exist
 // (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
 // bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
@@ -394,17 +404,13 @@ pub enum RawExpression {
     /// a binary expression, e.g. `s1:1 + s1:0`
     Binary(Box<Expression>, BinaryOperator, Box<Expression>),
 
-    /// A let expression is:
-    /// * a name bound to a...
-    /// * value (i.e. expression), followed by
-    /// * an expression that (presumably) uses the bound variable
+    /// 1 or more let expressions (i.e. the vector may be empty).
     ///
-    /// This last is optional; when absent, the value of the let expression is `()`.
-    Let(
-        VariableDeclaration,
-        Box<Expression>,
-        Option<Box<Expression>>,
-    ),
+    /// Every binding is in scope in the bindings that come after it in the vector (i.e. a
+    /// binding is lexically scoped). The final expression, if present (and we expect it to
+    /// exist most of the time), can use all the bindings. When absent, the value of the let
+    /// expression is `()`.
+    Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
 }
 
 impl From<Literal> for RawExpression {
@@ -437,11 +443,9 @@ impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
     }
 }
 
-impl From<(VariableDeclaration, Expression, Option<Expression>)> for RawExpression {
-    fn from(
-        (var, bound_expr, using_expr): (VariableDeclaration, Expression, Option<Expression>),
-    ) -> Self {
-        RawExpression::Let(var, Box::new(bound_expr), using_expr.map(|x| Box::new(x)))
+impl From<(NonEmpty<LetBinding>, Option<Expression>)> for RawExpression {
+    fn from((bindings, using_expr): (NonEmpty<LetBinding>, Option<Expression>)) -> Self {
+        RawExpression::Let(bindings, using_expr.map(|x| Box::new(x)))
     }
 }
 
