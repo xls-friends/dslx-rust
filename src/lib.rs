@@ -282,8 +282,6 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     alt((
         spanned(delimited(tag("("), parse_expression(None), tag_ws(")"))),
         spanned(parse_literal),
-        // TODO parse parenthesized expressions? see
-        // https://btmc.substack.com/p/how-to-parse-expressions-easy
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
     ))
     .parse(input)
