@@ -339,12 +339,15 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 fn parse_let_expression(
     input: ParseInput,
 ) -> ParseResult<(VariableDeclaration, Expression, Option<Expression>)> {
-    // let must be followed by at least 1 whitespace
-    let let_p = terminated(tag_ws("let"), whitespace_exactly1);
-    let var_p = delimited(let_p, parse_variable_declaration, tag_ws("="));
+    let var_decl = delimited(
+        // let must be followed by at least 1 whitespace
+        tuple((tag_ws("let"), whitespace_exactly1)),
+        parse_variable_declaration,
+        tag_ws("="),
+    );
     let bound_expr = terminated(parse_expression(None), tag_ws(";"));
     let using_expr = opt(parse_expression(None));
-    tuple((var_p, bound_expr, using_expr)).parse(input)
+    tuple((var_decl, bound_expr, using_expr)).parse(input)
 }
 
 /// Parses a binary operator and the expression that follows it, given the expression preceding
