@@ -282,18 +282,30 @@ fn parse_unary_expression(input: ParseInput) -> ParseResult<(UnaryOperator, Expr
 /// Parses a binary operator. E.g. `|`, `&`, etc.
 fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
     let op = alt((
-        // These two must be first, else | and & are matched
+        // These two must match before | and &
         value(RawBinaryOperator::BooleanOr, tag("||")),
         value(RawBinaryOperator::BooleanAnd, tag("&&")),
         // now match | and &
         value(RawBinaryOperator::BitwiseOr, tag("|")),
         value(RawBinaryOperator::BitwiseAnd, tag("&")),
+        value(RawBinaryOperator::BitwiseXor, tag("^")),
+        // concatenate must match before +
+        value(RawBinaryOperator::Concatenate, tag("++")),
+        // the order of these does not matter
+        // arithmetic
         value(RawBinaryOperator::Add, tag("+")),
         value(RawBinaryOperator::Subtract, tag("-")),
-        value(RawBinaryOperator::BitwiseXor, tag("^")),
         value(RawBinaryOperator::Multiply, tag("*")),
+        // shift
         value(RawBinaryOperator::ShiftRight, tag(">>")),
         value(RawBinaryOperator::ShiftLeft, tag("<<")),
+        // compare
+        value(RawBinaryOperator::Equal, tag("==")),
+        value(RawBinaryOperator::NotEqual, tag("!=")),
+        value(RawBinaryOperator::GreaterOrEqual, tag(">=")),
+        value(RawBinaryOperator::Greater, tag(">")),
+        value(RawBinaryOperator::LessOrEqual, tag("<=")),
+        value(RawBinaryOperator::Less, tag("<")),
     ));
     spanned(op).parse(input)
 }
@@ -1006,25 +1018,44 @@ mod tests {
         parse_binary_operator(ParseInput::new(" | ")).expect("");
         parse_binary_operator(ParseInput::new(" & ")).expect("");
 
-        let (_, r) = parse_binary_operator(ParseInput::new("|")).unwrap();
-        assert_eq!(r.thing, RawBinaryOperator::BitwiseOr);
-        let (_, r) = parse_binary_operator(ParseInput::new("&")).unwrap();
-        assert_eq!(r.thing, RawBinaryOperator::BitwiseAnd);
-        let (_, r) = parse_binary_operator(ParseInput::new("+")).unwrap();
-        assert_eq!(r.thing, RawBinaryOperator::Add);
-        let (_, r) = parse_binary_operator(ParseInput::new("-")).unwrap();
-        assert_eq!(r.thing, RawBinaryOperator::Subtract);
-        let (_, r) = parse_binary_operator(ParseInput::new("^")).unwrap();
-        assert_eq!(r.thing, RawBinaryOperator::BitwiseXor);
-        let (_, r) = parse_binary_operator(ParseInput::new("*")).unwrap();
-        assert_eq!(r.thing, RawBinaryOperator::Multiply);
         let (_, r) = parse_binary_operator(ParseInput::new("||")).unwrap();
         assert_eq!(r.thing, RawBinaryOperator::BooleanOr);
         let (_, r) = parse_binary_operator(ParseInput::new("&&")).unwrap();
         assert_eq!(r.thing, RawBinaryOperator::BooleanAnd);
+
+        let (_, r) = parse_binary_operator(ParseInput::new("|")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BitwiseOr);
+        let (_, r) = parse_binary_operator(ParseInput::new("&")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BitwiseAnd);
+        let (_, r) = parse_binary_operator(ParseInput::new("^")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::BitwiseXor);
+
+        let (_, r) = parse_binary_operator(ParseInput::new("+")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Add);
+        let (_, r) = parse_binary_operator(ParseInput::new("-")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Subtract);
+        let (_, r) = parse_binary_operator(ParseInput::new("*")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Multiply);
+
         let (_, r) = parse_binary_operator(ParseInput::new(">>")).unwrap();
         assert_eq!(r.thing, RawBinaryOperator::ShiftRight);
         let (_, r) = parse_binary_operator(ParseInput::new("<<")).unwrap();
         assert_eq!(r.thing, RawBinaryOperator::ShiftLeft);
+
+        let (_, r) = parse_binary_operator(ParseInput::new("==")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Equal);
+        let (_, r) = parse_binary_operator(ParseInput::new("!=")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::NotEqual);
+        let (_, r) = parse_binary_operator(ParseInput::new(">=")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::GreaterOrEqual);
+        let (_, r) = parse_binary_operator(ParseInput::new(">")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Greater);
+        let (_, r) = parse_binary_operator(ParseInput::new("<=")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::LessOrEqual);
+        let (_, r) = parse_binary_operator(ParseInput::new("<")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Less);
+
+        let (_, r) = parse_binary_operator(ParseInput::new("++")).unwrap();
+        assert_eq!(r.thing, RawBinaryOperator::Concatenate);
     }
 }
