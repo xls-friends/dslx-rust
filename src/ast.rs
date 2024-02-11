@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use num_bigint::{BigInt, BigUint};
 
 // Defines the types in the AST for DSLX.
@@ -202,37 +204,164 @@ pub enum RawUnaryOperator {
 
 pub type UnaryOperator = Spanned<RawUnaryOperator>;
 
-/// Operators for binary expressions
+/// Operators for binary expressions.
 ///
 /// see <https://google.github.io/xls/dslx_reference/#binary-expressions>
-#[derive(Debug, PartialEq, Clone)]
+/// <https://google.github.io/xls/dslx_reference/#shift-expressions>
+/// <https://google.github.io/xls/dslx_reference/#comparison-expressions>
+/// <https://google.github.io/xls/dslx_reference/#concat-expression>
+///
+/// They are ordered from highest precedence to lowest, and grouped when same precedence.
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum RawBinaryOperator {
-    /// `||`, boolean or
-    BooleanOr,
-    /// `&&`, boolean and
-    BooleanAnd,
-
-    /// `|`, bit-wise or
-    BitwiseOr,
-    /// `&`, bit-wise and
-    BitwiseAnd,
-    /// `^`, bit-wise xor
-    BitwiseXor,
+    /// `*`, multiply
+    Multiply,
 
     /// `+`, add
     Add,
     /// `-`, subtract
     Subtract,
-    /// `*`, multiply
-    Multiply,
+    /// `++` bitwise concatenation
+    Concatenate,
 
     /// `>>`, shift right (both logical and arithmetic, depending on context)
     ShiftRight,
     /// `<<`, shift left
     ShiftLeft,
+
+    /// `&`, bit-wise and
+    BitwiseAnd,
+
+    /// `^`, bit-wise xor
+    BitwiseXor,
+
+    /// `|`, bit-wise or
+    BitwiseOr,
+
+    /// `==` equal
+    Equal,
+    /// `!=` not equal
+    NotEqual,
+    /// `>=` greater or equal
+    GreaterOrEqual,
+    /// `>`  greater
+    Greater,
+    /// `<=` less or equal
+    LessOrEqual,
+    /// `<`  less
+    Less,
+
+    /// `&&`, boolean and
+    BooleanAnd,
+
+    /// `||`, boolean or
+    BooleanOr,
 }
 
 pub type BinaryOperator = Spanned<RawBinaryOperator>;
+
+impl RawBinaryOperator {
+    /// Returns true for the 6 comparison operators (== != < > <= >=), otherwise false.
+    fn is_comparison(&self) -> bool {
+        match self {
+            RawBinaryOperator::Multiply => false,
+            RawBinaryOperator::Add => false,
+            RawBinaryOperator::Subtract => false,
+            RawBinaryOperator::Concatenate => false,
+            RawBinaryOperator::ShiftRight => false,
+            RawBinaryOperator::ShiftLeft => false,
+            RawBinaryOperator::BitwiseAnd => false,
+            RawBinaryOperator::BitwiseXor => false,
+            RawBinaryOperator::BitwiseOr => false,
+            RawBinaryOperator::Equal => true,
+            RawBinaryOperator::NotEqual => true,
+            RawBinaryOperator::GreaterOrEqual => true,
+            RawBinaryOperator::Greater => true,
+            RawBinaryOperator::LessOrEqual => true,
+            RawBinaryOperator::Less => true,
+            RawBinaryOperator::BooleanAnd => false,
+            RawBinaryOperator::BooleanOr => false,
+        }
+    }
+}
+
+impl PartialOrd for RawBinaryOperator {
+    /// Implements DSLX binary operator precedence. I.e. x Some(Greater) y means that x is
+    /// higher in the precedence table than y. x None y means they're the same precedence.
+    /// see <https://google.github.io/xls/dslx_reference/#operator-precedence>
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if PartialEq::eq(self, other) {
+            Some(Ordering::Equal)
+        } else {
+            match (self, other) {
+                (Self::Multiply, _) => Some(Ordering::Greater),
+                (_, Self::Multiply) => Some(Ordering::Less),
+
+                // TODO verify:
+                // If I'm reading
+                // https://github.com/google/xls/blob/main/xls/dslx/frontend/parser.h#L360C53-L360C74
+                // correctly, ++ is same precedence as + and -
+                (Self::Add, Self::Subtract) => None,
+                (Self::Add, Self::Concatenate) => None,
+                (Self::Subtract, Self::Add) => None,
+                (Self::Subtract, Self::Concatenate) => None,
+                (Self::Concatenate, Self::Add) => None,
+                (Self::Concatenate, Self::Subtract) => None,
+                (Self::Add, _) => Some(Ordering::Greater),
+                (Self::Subtract, _) => Some(Ordering::Greater),
+                (Self::Concatenate, _) => Some(Ordering::Greater),
+                (_, Self::Add) => Some(Ordering::Less),
+                (_, Self::Subtract) => Some(Ordering::Less),
+                (_, Self::Concatenate) => Some(Ordering::Less),
+
+                // shift
+                (Self::ShiftRight, Self::ShiftLeft) => None,
+                (Self::ShiftLeft, Self::ShiftRight) => None,
+                (Self::ShiftRight, _) => Some(Ordering::Greater),
+                (Self::ShiftLeft, _) => Some(Ordering::Greater),
+                (_, Self::ShiftRight) => Some(Ordering::Less),
+                (_, Self::ShiftLeft) => Some(Ordering::Less),
+
+                // bitwise are different precedence from each other
+                (Self::BitwiseAnd, _) => Some(Ordering::Greater),
+                (_, Self::BitwiseAnd) => Some(Ordering::Less),
+                (Self::BitwiseXor, _) => Some(Ordering::Greater),
+                (_, Self::BitwiseXor) => Some(Ordering::Less),
+                (Self::BitwiseOr, _) => Some(Ordering::Greater),
+                (_, Self::BitwiseOr) => Some(Ordering::Less),
+
+                (Self::Equal, other) if other.is_comparison() => None,
+                (Self::NotEqual, other) if other.is_comparison() => None,
+                (Self::GreaterOrEqual, other) if other.is_comparison() => None,
+                (Self::Greater, other) if other.is_comparison() => None,
+                (Self::LessOrEqual, other) if other.is_comparison() => None,
+                (Self::Less, other) if other.is_comparison() => None,
+                (Self::Equal, _) => Some(Ordering::Greater),
+                (Self::NotEqual, _) => Some(Ordering::Greater),
+                (Self::GreaterOrEqual, _) => Some(Ordering::Greater),
+                (Self::Greater, _) => Some(Ordering::Greater),
+                (Self::LessOrEqual, _) => Some(Ordering::Greater),
+                (Self::Less, _) => Some(Ordering::Greater),
+                (_, Self::Equal) => Some(Ordering::Less),
+                (_, Self::NotEqual) => Some(Ordering::Less),
+                (_, Self::GreaterOrEqual) => Some(Ordering::Less),
+                (_, Self::Greater) => Some(Ordering::Less),
+                (_, Self::LessOrEqual) => Some(Ordering::Less),
+                (_, Self::Less) => Some(Ordering::Less),
+
+                (Self::BooleanAnd, _) => Some(Ordering::Greater),
+                (_, Self::BooleanAnd) => Some(Ordering::Less),
+
+                // We avoid a wildcard match so that we update this logic when new cases are added
+                //
+                // Required to satisfy the exhaustiveness checker
+                (Self::BooleanOr, Self::BooleanOr) => {
+                    panic!("logically impossible because of PartialEq::eq(self, other) above")
+                }
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub enum RawExpression {
@@ -261,4 +390,235 @@ pub type Expression = Spanned<RawExpression>;
 pub struct Spanned<Thing> {
     pub span: Span,
     pub thing: Thing,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use itertools::Itertools;
+
+    #[test]
+    fn test_raw_binary_operator_partial_ord() -> () {
+        // Asserts: this > that AND that < this
+        fn this_greater_than_that(this: RawBinaryOperator, that: RawBinaryOperator) -> () {
+            assert_eq!(this.partial_cmp(&that), Some(Ordering::Greater));
+            assert_eq!(this > that, true);
+            assert_eq!(this >= that, true);
+            assert_eq!(that.partial_cmp(&this), Some(Ordering::Less));
+            assert_eq!(that < this, true);
+            assert_eq!(that <= this, true);
+
+            assert_eq!(this == that, false);
+            assert_eq!(that == this, false);
+
+            assert_eq!(this != that, true);
+            assert_eq!(that != this, true);
+        }
+
+        // Asserts: this and that are unordered and not equal
+        fn same_precedence(this: RawBinaryOperator, that: RawBinaryOperator) -> () {
+            assert_eq!(this.partial_cmp(&that), None);
+            assert_eq!(this > that, false);
+            assert_eq!(this < that, false);
+            assert_eq!(this <= that, false);
+            assert_eq!(this >= that, false);
+            assert_eq!(this == that, false);
+
+            assert_eq!(that.partial_cmp(&this), None);
+            assert_eq!(that > this, false);
+            assert_eq!(that < this, false);
+            assert_eq!(that <= this, false);
+            assert_eq!(that >= this, false);
+            assert_eq!(that == this, false);
+
+            assert_eq!(this != that, true);
+            assert_eq!(that != this, true);
+        }
+
+        // partial_cmp says reflexive is equal
+        fn is_reflexive(this: RawBinaryOperator) -> () {
+            assert_eq!(this.partial_cmp(&this), Some(Ordering::Equal));
+            assert_eq!(this == this, true);
+            assert_eq!(this != this, false);
+        }
+
+        is_reflexive(RawBinaryOperator::Multiply);
+        is_reflexive(RawBinaryOperator::Add);
+        is_reflexive(RawBinaryOperator::Subtract);
+        is_reflexive(RawBinaryOperator::Concatenate);
+        is_reflexive(RawBinaryOperator::ShiftRight);
+        is_reflexive(RawBinaryOperator::ShiftLeft);
+        is_reflexive(RawBinaryOperator::BitwiseAnd);
+        is_reflexive(RawBinaryOperator::BitwiseXor);
+        is_reflexive(RawBinaryOperator::BitwiseOr);
+        is_reflexive(RawBinaryOperator::Equal);
+        is_reflexive(RawBinaryOperator::NotEqual);
+        is_reflexive(RawBinaryOperator::GreaterOrEqual);
+        is_reflexive(RawBinaryOperator::Greater);
+        is_reflexive(RawBinaryOperator::LessOrEqual);
+        is_reflexive(RawBinaryOperator::Less);
+        is_reflexive(RawBinaryOperator::BooleanAnd);
+        is_reflexive(RawBinaryOperator::BooleanOr);
+
+        // Multiply highest precedence
+        let it = vec![
+            RawBinaryOperator::Add,
+            RawBinaryOperator::Subtract,
+            RawBinaryOperator::Concatenate,
+            RawBinaryOperator::ShiftRight,
+            RawBinaryOperator::ShiftLeft,
+            RawBinaryOperator::BitwiseAnd,
+            RawBinaryOperator::BitwiseXor,
+            RawBinaryOperator::BitwiseOr,
+            RawBinaryOperator::Equal,
+            RawBinaryOperator::NotEqual,
+            RawBinaryOperator::GreaterOrEqual,
+            RawBinaryOperator::Greater,
+            RawBinaryOperator::LessOrEqual,
+            RawBinaryOperator::Less,
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+        ]
+        .into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::Multiply, op);
+        }
+
+        // weak arithmetic same prec
+        for ops in vec![
+            RawBinaryOperator::Add,
+            RawBinaryOperator::Subtract,
+            RawBinaryOperator::Concatenate,
+        ]
+        .into_iter()
+        .combinations(2)
+        {
+            same_precedence(ops[0], ops[1]);
+        }
+
+        // weak arithmetic next-highest precedence
+        let it = vec![
+            RawBinaryOperator::ShiftRight,
+            RawBinaryOperator::ShiftLeft,
+            RawBinaryOperator::BitwiseAnd,
+            RawBinaryOperator::BitwiseXor,
+            RawBinaryOperator::BitwiseOr,
+            RawBinaryOperator::Equal,
+            RawBinaryOperator::NotEqual,
+            RawBinaryOperator::GreaterOrEqual,
+            RawBinaryOperator::Greater,
+            RawBinaryOperator::LessOrEqual,
+            RawBinaryOperator::Less,
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+        ]
+        .into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::Add, op);
+            this_greater_than_that(RawBinaryOperator::Subtract, op);
+            this_greater_than_that(RawBinaryOperator::Concatenate, op);
+        }
+
+        // shift same precedence
+        same_precedence(RawBinaryOperator::ShiftLeft, RawBinaryOperator::ShiftRight);
+
+        // shift next-highest precedence
+        let it = vec![
+            RawBinaryOperator::BitwiseAnd,
+            RawBinaryOperator::BitwiseXor,
+            RawBinaryOperator::BitwiseOr,
+            RawBinaryOperator::Equal,
+            RawBinaryOperator::NotEqual,
+            RawBinaryOperator::GreaterOrEqual,
+            RawBinaryOperator::Greater,
+            RawBinaryOperator::LessOrEqual,
+            RawBinaryOperator::Less,
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+        ]
+        .into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::ShiftRight, op);
+            this_greater_than_that(RawBinaryOperator::ShiftLeft, op);
+        }
+
+        // bitwise AND next-highest precedence
+        let it = vec![
+            RawBinaryOperator::BitwiseXor,
+            RawBinaryOperator::BitwiseOr,
+            RawBinaryOperator::Equal,
+            RawBinaryOperator::NotEqual,
+            RawBinaryOperator::GreaterOrEqual,
+            RawBinaryOperator::Greater,
+            RawBinaryOperator::LessOrEqual,
+            RawBinaryOperator::Less,
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+        ]
+        .into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::BitwiseAnd, op);
+        }
+
+        // bitwise XOR next-highest precedence
+        let it = vec![
+            RawBinaryOperator::BitwiseOr,
+            RawBinaryOperator::Equal,
+            RawBinaryOperator::NotEqual,
+            RawBinaryOperator::GreaterOrEqual,
+            RawBinaryOperator::Greater,
+            RawBinaryOperator::LessOrEqual,
+            RawBinaryOperator::Less,
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+        ]
+        .into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::BitwiseXor, op);
+        }
+
+        // bitwise OR next-highest precedence
+        let it = vec![
+            RawBinaryOperator::Equal,
+            RawBinaryOperator::NotEqual,
+            RawBinaryOperator::GreaterOrEqual,
+            RawBinaryOperator::Greater,
+            RawBinaryOperator::LessOrEqual,
+            RawBinaryOperator::Less,
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+        ]
+        .into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::BitwiseOr, op);
+        }
+
+        // comparison
+        for ops in vec![
+            RawBinaryOperator::Equal,
+            RawBinaryOperator::NotEqual,
+            RawBinaryOperator::GreaterOrEqual,
+            RawBinaryOperator::Greater,
+            RawBinaryOperator::LessOrEqual,
+            RawBinaryOperator::Less,
+        ]
+        .into_iter()
+        .combinations(2)
+        {
+            same_precedence(ops[0], ops[1]);
+        }
+        // comparison next-highest precedence
+        let it = vec![RawBinaryOperator::BooleanAnd, RawBinaryOperator::BooleanOr].into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::Equal, op);
+            this_greater_than_that(RawBinaryOperator::NotEqual, op);
+            this_greater_than_that(RawBinaryOperator::GreaterOrEqual, op);
+            this_greater_than_that(RawBinaryOperator::Greater, op);
+            this_greater_than_that(RawBinaryOperator::LessOrEqual, op);
+            this_greater_than_that(RawBinaryOperator::Less, op);
+        }
+
+        // last two
+        this_greater_than_that(RawBinaryOperator::BooleanAnd, RawBinaryOperator::BooleanOr);
+    }
 }
