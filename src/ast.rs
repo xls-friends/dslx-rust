@@ -445,7 +445,7 @@ impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
 
 impl From<(NonEmpty<LetBinding>, Option<Expression>)> for RawExpression {
     fn from((bindings, using_expr): (NonEmpty<LetBinding>, Option<Expression>)) -> Self {
-        RawExpression::Let(bindings, using_expr.map(|x| Box::new(x)))
+        RawExpression::Let(bindings, using_expr.map(Box::new))
     }
 }
 

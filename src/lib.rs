@@ -357,7 +357,7 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     alt((
         spanned(delimited(
             tag("("),
-            parse_expression(None).map(|e| ParenthesizedExpression(e)),
+            parse_expression(None).map(ParenthesizedExpression),
             tag_ws(")"),
         )),
         spanned(parse_let_expression),
