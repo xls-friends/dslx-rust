@@ -382,6 +382,9 @@ pub type LetBinding = Spanned<RawLetBinding>;
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParenthesizedExpression(pub Expression);
 
+/// This serves a similar purpose to ParenthesizedExpression.
+pub struct BlockExpression(pub Expression);
+
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
@@ -403,7 +406,7 @@ pub enum RawExpression {
 
     /// Block expressions enable subordinate scopes to be defined. E.g.:
     ///
-    /// ```
+    /// ```ignore
     /// let a = {
     ///   let b = u32:1;
     ///   b + u32:3
@@ -450,6 +453,12 @@ impl From<(UnaryOperator, Expression)> for RawExpression {
 impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
     fn from((lhs, op, rhs): (Expression, BinaryOperator, Expression)) -> Self {
         RawExpression::Binary(Box::new(lhs), op, Box::new(rhs))
+    }
+}
+
+impl From<BlockExpression> for RawExpression {
+    fn from(BlockExpression(x): BlockExpression) -> Self {
+        RawExpression::Block(Box::new(x))
     }
 }
 
