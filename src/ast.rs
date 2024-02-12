@@ -375,10 +375,10 @@ pub struct RawLetBinding {
 }
 pub type LetBinding = Spanned<RawLetBinding>;
 
-// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
-// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
-// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
-// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+/// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
+/// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
+/// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
+/// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParenthesizedExpression(pub Expression);
 
