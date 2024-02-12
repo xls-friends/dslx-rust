@@ -317,10 +317,10 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 /// expression after the let (after all, what's the point of declaring a variable binding if
 /// you're never going to use the variable?), but not required. So the trailing expression is
 /// optional.
-fn parse_let_expression(
-    input: ParseInput,
-) -> ParseResult<(NonEmpty<LetBinding>, Option<Expression>)> {
-    fn parse_let_binding(input: ParseInput) -> ParseResult<RawLetBinding> {
+fn parse_let_expression<'a>(
+    input: ParseInput<'a>,
+) -> ParseResult<'a, (NonEmpty<LetBinding>, Option<Expression>)> {
+    let parse_let_binding = |input: ParseInput<'a>| -> ParseResult<'a, RawLetBinding> {
         let var_decl = delimited(
             // let must be followed by at least 1 whitespace
             tuple((tag_ws("let"), whitespace_exactly1)),
@@ -334,7 +334,7 @@ fn parse_let_expression(
                 value: Box::new(value),
             })
             .parse(input)
-    }
+    };
 
     // We avoid a recursive parsing implementation of nested let expressions to avoid stack
     // overflows when fuzzing. Furthermore, we want to be as robust as possible, and not make
