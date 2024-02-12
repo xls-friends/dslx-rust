@@ -1465,9 +1465,7 @@ mod tests {
         // two parens changes nothing
         {
             let first = RawBinaryOperator::BooleanOr;
-            let second = RawBinaryOperator::Multiply;
-            let loc = FirstsLocation::RightHandSide;
-            let (lhs, op, rhs) = expression_is_binary(
+            let (_lhs, _opp, rhs) = expression_is_binary(
                 all_consuming(parse_expression(None))(ParseInput::new("u1:1 * ((u1:1 || u1:1))"))
                     .unwrap()
                     .1,
