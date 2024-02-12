@@ -470,7 +470,7 @@ mod tests {
     fn expression_is_literal(x: Expression) -> RawLiteral {
         match x.thing {
             RawExpression::Literal(Spanned { span: _, thing }) => thing,
-            _ => panic!("wasn't literal expression"),
+            _ => panic!("wasn't Literal expression"),
         }
     }
 
@@ -478,7 +478,7 @@ mod tests {
     fn expression_is_unary(x: Expression) -> (RawUnaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Unary(Spanned { span: _, thing }, expr) => (thing, expr),
-            _ => panic!("wasn't unary expression"),
+            _ => panic!("wasn't Unary expression"),
         }
     }
 
@@ -488,7 +488,7 @@ mod tests {
     ) -> (Box<Expression>, RawBinaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Binary(lhs, Spanned { span: _, thing: op }, rhs) => (lhs, op, rhs),
-            _ => panic!("wasn't binary expression"),
+            _ => panic!("wasn't Binary expression"),
         }
     }
 
@@ -496,7 +496,15 @@ mod tests {
     fn expression_is_parenthesized(x: Expression) -> Box<Expression> {
         match x.thing {
             RawExpression::Parenthesized(b) => b,
-            _ => panic!("wasn't parenthesized expression"),
+            _ => panic!("wasn't Parenthesized expression"),
+        }
+    }
+
+    // Panics if Expression is not the correct case
+    fn expression_is_block(x: Expression) -> Box<Expression> {
+        match x.thing {
+            RawExpression::Block(b) => b,
+            _ => panic!("wasn't Block expression"),
         }
     }
 
@@ -504,7 +512,7 @@ mod tests {
     fn expression_is_let(x: Expression) -> (NonEmpty<LetBinding>, Option<Box<Expression>>) {
         match x.thing {
             RawExpression::Let(xs, e) => (xs, e),
-            _ => panic!("wasn't let expression"),
+            _ => panic!("wasn't Let expression"),
         }
     }
 
@@ -1557,6 +1565,30 @@ mod tests {
         );
         assert_eq!((*lhs).span, Span::from(((1, 1, 2), (12, 1, 13))));
         assert_eq!((*rhs).span, Span::from(((15, 1, 16), (26, 1, 27))));
+    }
+
+    #[test]
+    fn test_parse_block_expression() -> () {
+        // mismatched/interleaved curly {} is wrong
+        all_consuming(parse_expression(None))(ParseInput::new("{u1:1")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("u1:1}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("{{u1:1}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("{u1:1}}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("{{u1}:1}}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("u1{:}1")).expect_err("");
+
+        // fix the above
+        all_consuming(parse_expression(None))(ParseInput::new("{u1:1}")).expect("");
+
+        // whitespace accepted
+        all_consuming(parse_expression(None))(ParseInput::new(" { u1 : 1 }")).expect("");
+
+        let inside = expression_is_block(
+            parse_expression(None)(ParseInput::new("{ let a: u32 = u32:1 * u32:2; a & a }"))
+                .unwrap()
+                .1,
+        );
+        expression_is_let(*inside);
     }
 
     #[test]
