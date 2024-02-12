@@ -258,15 +258,15 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
 /// `s8:128`, `s8:-128`
 ///
 /// Uses the bit type to determine which kind of `RawInteger` to parse.
-fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
-    fn parse(input: ParseInput) -> ParseResult<RawLiteral> {
+fn parse_literal<'a>(input: ParseInput<'a>) -> ParseResult<'a, Literal> {
+    let parse = |input: ParseInput<'a>| -> ParseResult<'a, RawLiteral> {
         let (input, bit_type) = terminated(parse_bit_type, tag_ws(":"))(input)?;
         let (rest, value): (ParseInput, Integer) = match bit_type.thing.signedness {
             Signedness::Signed => spanned(parse_signed_integer).parse(input),
             Signedness::Unsigned => spanned(parse_unsigned_integer).parse(input),
         }?;
         Ok((rest, RawLiteral { value, bit_type }))
-    }
+    };
 
     spanned(parse).parse(input)
 }
