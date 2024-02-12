@@ -406,7 +406,7 @@ pub enum RawExpression {
 
     /// Block expressions enable subordinate scopes to be defined. E.g.:
     ///
-    /// ```ignore
+    /// ```
     /// let a = {
     ///   let b = u32:1;
     ///   b + u32:3
