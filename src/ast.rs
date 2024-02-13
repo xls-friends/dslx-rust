@@ -396,14 +396,15 @@ pub type LetBinding = Spanned<RawLetBinding>;
 ///
 /// see <https://google.github.io/xls/dslx_reference/#if-expression>
 #[derive(Debug, PartialEq, Clone)]
-pub struct ConditionConsequent {
+pub struct RawConditionConsequent {
     /// An Expression that must be Boolean typed. When evaluated, if true, then `consequent` is
     /// the value of the enclosing `if` expression.
-    condition: Expression,
+    pub condition: Expression,
 
     /// The value of the `if` expression, if `condition` is true.
-    consequent: Expression,
+    pub consequent: Expression,
 }
+pub type ConditionConsequent = Spanned<RawConditionConsequent>;
 
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 ///
@@ -492,6 +493,12 @@ impl From<BlockExpression> for RawExpression {
 impl From<(NonEmpty<LetBinding>, Option<Expression>)> for RawExpression {
     fn from((bindings, using_expr): (NonEmpty<LetBinding>, Option<Expression>)) -> Self {
         RawExpression::Let(bindings, using_expr.map(Box::new))
+    }
+}
+
+impl From<(NonEmpty<ConditionConsequent>, Expression)> for RawExpression {
+    fn from((ifelses, alternate): (NonEmpty<ConditionConsequent>, Expression)) -> Self {
+        RawExpression::IfElse(ifelses.map(Box::new), Box::new(alternate))
     }
 }
 

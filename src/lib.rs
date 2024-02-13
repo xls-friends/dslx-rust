@@ -350,6 +350,44 @@ fn parse_let_expression<'a>(
     tuple((bindings, using_expr)).parse(input)
 }
 
+/// Parses an `if...else if...else` expression. E.g.
+/// `if condition0 { consequent0 } else if condition1 { consequent1 } else { alternate }`
+fn parse_ifelse_expression<'a>(
+    input: ParseInput<'a>,
+) -> ParseResult<'a, (NonEmpty<ConditionConsequent>, Expression)> {
+    let parse_if_condition_consequent =
+        |input: ParseInput<'a>| -> ParseResult<'a, RawConditionConsequent> {
+            let if_cond = preceded(
+                // if must be followed by at least 1 whitespace
+                tuple((tag_ws("if"), whitespace_exactly1)),
+                parse_expression(None),
+            );
+            let consequent = delimited(tag_ws("{"), parse_expression(None), tag_ws("}"));
+            tuple((if_cond, consequent))
+                .map(|(condition, consequent)| RawConditionConsequent {
+                    condition,
+                    consequent,
+                })
+                .parse(input)
+        };
+
+    // We avoid a recursive parsing implementation of nested if...else if expressions to avoid
+    // stack overflows when fuzzing.
+    let ifelses =
+        separated_list1(tag_ws("else"), spanned(parse_if_condition_consequent)).map(|xs| {
+            let mut ys = NonEmpty::new(xs.first().unwrap().clone());
+            ys.extend(xs.iter().skip(1).cloned());
+            ys
+        });
+
+    let alternate = preceded(
+        tag_ws("else"),
+        delimited(tag_ws("{"), parse_expression(None), tag_ws("}")),
+    );
+
+    tuple((ifelses, alternate)).parse(input)
+}
+
 /// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
 fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
