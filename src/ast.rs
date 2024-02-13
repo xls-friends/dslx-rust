@@ -391,6 +391,20 @@ pub struct RawLetBinding {
 }
 pub type LetBinding = Spanned<RawLetBinding>;
 
+/// The condition and consequent of the first half of an `if` expression:
+/// `if condition { consequent }`
+///
+/// see <https://google.github.io/xls/dslx_reference/#if-expression>
+#[derive(Debug, PartialEq, Clone)]
+pub struct ConditionConsequent {
+    /// An Expression that must be Boolean typed. When evaluated, if true, then `consequent` is
+    /// the value of the enclosing `if` expression.
+    condition: Expression,
+
+    /// The value of the `if` expression, if `condition` is true.
+    consequent: Expression,
+}
+
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 ///
 /// See https://google.github.io/xls/dslx_reference/#expressions
@@ -432,6 +446,11 @@ pub enum RawExpression {
     /// exist most of the time, otherwise, why bother with an if expression), can use all the
     /// bindings. When absent, the value of the let expression is `()`.
     Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
+
+    /// 1 or more `if` and `else if` expressions, followed by the final `else`'s alternate
+    /// expression. I.e., if all the conditions in the vector are `false`, this `if...else
+    /// if...else` expression evalutes to the alternate expression.
+    IfElse(NonEmpty<Box<ConditionConsequent>>, Box<Expression>),
 }
 
 impl From<Literal> for RawExpression {
