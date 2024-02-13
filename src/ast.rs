@@ -401,6 +401,19 @@ pub enum RawExpression {
     /// a binary expression, e.g. `s1:1 + s1:0`
     Binary(Box<Expression>, BinaryOperator, Box<Expression>),
 
+    /// Block expressions enable subordinate scopes to be defined. E.g.:
+    ///
+    /// ```
+    /// let a = {
+    ///   let b = u32:1;
+    ///   b + u32:3
+    /// };
+    /// ```
+    ///
+    /// The value of a block expression is that of its last contained expression, or (), if a
+    /// final expression is omitted:
+    Block(Box<Expression>),
+
     /// 1 or more let expressions (i.e. the vector may be empty).
     ///
     /// Every binding is in scope in the bindings that come after it in the vector (i.e. a
