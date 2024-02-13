@@ -185,6 +185,8 @@ impl From<BigInt> for RawInteger {
 pub type Integer = Spanned<RawInteger>;
 
 /// A literal, e.g. `s4:0b1001`.
+///
+/// see <https://google.github.io/xls/dslx_reference/#literals>
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLiteral {
     pub value: Integer,
@@ -374,10 +376,14 @@ impl PartialOrd for RawBinaryOperator {
 }
 
 /// This serves a similar purpose to ParenthesizedExpression.
+///
+/// see <https://google.github.io/xls/dslx_reference/#block-expressions>
 pub struct BlockExpression(pub Expression);
 
 /// *Part* of a let binding: the variable declaration and value it is bound to. What is missing
 /// is the expression in which the bound name is in-scope.
+///
+/// see <https://google.github.io/xls/dslx_reference/#let-expression>
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLetBinding {
     pub variable_declaration: BindingDecl,
@@ -386,6 +392,8 @@ pub struct RawLetBinding {
 pub type LetBinding = Spanned<RawLetBinding>;
 
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
+///
+/// See https://google.github.io/xls/dslx_reference/#expressions
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
     /// A literal, e.g. `s4:0b1001`
