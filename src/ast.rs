@@ -408,8 +408,8 @@ pub enum RawExpression {
     ///
     /// Every binding is in scope in the bindings that come after it in the vector (i.e. a
     /// binding is lexically scoped). The final expression, if present (and we expect it to
-    /// exist most of the time), can use all the bindings. When absent, the value of the let
-    /// expression is `()`.
+    /// exist most of the time, otherwise, why bother with an if expression), can use all the
+    /// bindings. When absent, the value of the let expression is `()`.
     Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
 }
 
