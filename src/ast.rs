@@ -206,6 +206,13 @@ pub enum RawUnaryOperator {
 
 pub type UnaryOperator = Spanned<RawUnaryOperator>;
 
+/// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
+/// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
+/// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
+/// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParenthesizedExpression(pub Expression);
+
 /// Operators for binary expressions.
 ///
 /// see <https://google.github.io/xls/dslx_reference/#binary-expressions>
@@ -366,6 +373,9 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
+/// This serves a similar purpose to ParenthesizedExpression.
+pub struct BlockExpression(pub Expression);
+
 /// *Part* of a let binding: the variable declaration and value it is bound to. What is missing
 /// is the expression in which the bound name is in-scope.
 #[derive(Debug, PartialEq, Clone)]
@@ -374,16 +384,6 @@ pub struct RawLetBinding {
     pub value: Box<Expression>,
 }
 pub type LetBinding = Spanned<RawLetBinding>;
-
-/// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
-/// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
-/// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
-/// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
-#[derive(Debug, PartialEq, Clone)]
-pub struct ParenthesizedExpression(pub Expression);
-
-/// This serves a similar purpose to ParenthesizedExpression.
-pub struct BlockExpression(pub Expression);
 
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 #[derive(Debug, PartialEq, Clone)]
