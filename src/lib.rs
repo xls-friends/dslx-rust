@@ -1718,6 +1718,18 @@ mod tests {
         ))
         .expect("");
 
+        // only necessary whitespace
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            "if condition{whentrue}else{whenfalse}",
+        ))
+        .expect("");
+
+        // if requires trailing whitespace
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            "ifcondition{whentrue}else{whenfalse}",
+        ))
+        .expect_err("");
+
         let (condition_consequent, alternate) = expression_is_ifelse(
             all_consuming(parse_expression(None))(ParseInput::new(
                 "if condition {whentrue} else {whenfalse}",
