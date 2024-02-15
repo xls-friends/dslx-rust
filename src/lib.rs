@@ -1750,6 +1750,54 @@ mod tests {
             expression_is_variable(*alternate),
             RawIdentifier("whenfalse".to_owned())
         );
+
+        // an if expression inside another expression
+        let (_, op, rhs) = expression_is_binary(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "u1:1 + if condition {whentrue} else {whenfalse}",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(op, RawBinaryOperator::Add);
+        let (condition_consequent, alternate) = expression_is_ifelse(*rhs);
+        assert_eq!(condition_consequent.len(), 1);
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
+
+        // an if expression on the lhs of another expression
+        let (lhs, op, _) = expression_is_binary(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "if condition {whentrue} else {whenfalse} + u1:1",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(op, RawBinaryOperator::Add);
+        let (condition_consequent, alternate) = expression_is_ifelse(*lhs);
+        assert_eq!(condition_consequent.len(), 1);
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
     }
 
     #[test]
