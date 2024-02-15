@@ -514,6 +514,14 @@ mod tests {
     }
 
     // Panics if Expression is not the correct case
+    fn expression_is_variable(x: Expression) -> RawIdentifier {
+        match x.thing {
+            RawExpression::Variable(Spanned { span: _, thing }) => thing,
+            _ => panic!("wasn't Literal expression"),
+        }
+    }
+
+    // Panics if Expression is not the correct case
     fn expression_is_unary(x: Expression) -> (RawUnaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Unary(Spanned { span: _, thing }, expr) => (thing, expr),
@@ -552,6 +560,16 @@ mod tests {
         match x.thing {
             RawExpression::Let(xs, e) => (xs, e),
             _ => panic!("wasn't Let expression"),
+        }
+    }
+
+    // Panics if Expression is not the correct case
+    fn expression_is_ifelse(
+        x: Expression,
+    ) -> (NonEmpty<Box<ConditionConsequent>>, Box<Expression>) {
+        match x.thing {
+            RawExpression::IfElse(xs, e) => (xs, e),
+            _ => panic!("wasn't ifelse expression"),
         }
     }
 
@@ -1684,5 +1702,73 @@ mod tests {
         assert_eq!(op, RawBinaryOperator::Add);
         let _ = expression_is_literal(*bindings[1].thing.value.clone());
         assert_eq!(using_expr, None);
+    }
+
+    #[test]
+    fn test_parse_ifelse_expression() -> () {
+        // basic
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            "if condition {whentrue} else {whenfalse}",
+        ))
+        .expect("");
+
+        // whitespace accepted
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            " if condition { whentrue } else { whenfalse }",
+        ))
+        .expect("");
+
+        let (condition_consequent, alternate) = expression_is_ifelse(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "if condition {whentrue} else {whenfalse}",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(condition_consequent.len(), 1);
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_parse_if_elseif_else_expression() -> () {
+        let (condition_consequent, alternate) = expression_is_ifelse(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "if condition {whentrue} else if condition2 {whentrue2} else {whenfalse}",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(condition_consequent.len(), 2);
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable((*condition_consequent[1]).thing.condition.clone()),
+            RawIdentifier("condition2".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable((*condition_consequent[1]).thing.consequent.clone()),
+            RawIdentifier("whentrue2".to_owned())
+        );
+        assert_eq!(
+            expression_is_variable(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
     }
 }
