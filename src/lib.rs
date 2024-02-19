@@ -438,14 +438,12 @@ fn parse_infix_expression<'a>(left: Expr) -> impl FnMut(ParseInput<'a>) -> Parse
             ))
         })
         .map(|(left, op, right)| {
-            let thing = RawExpr::from((left.clone(), op, right.clone()));
-            Spanned {
-                span: Span {
-                    start: left.span.start,
-                    end: right.span.end,
-                },
-                thing,
-            }
+            let span = Span {
+                start: left.span.start.clone(),
+                end: right.span.end.clone(),
+            };
+            let thing = RawExpr::from((left, op, right));
+            Spanned { span, thing }
         })
         .parse(input)
     }
