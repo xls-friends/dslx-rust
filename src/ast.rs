@@ -446,6 +446,9 @@ pub enum RawExpression {
     /// binding is lexically scoped). The final expression, if present (and we expect it to
     /// exist most of the time, otherwise, why bother with an if expression), can use all the
     /// bindings. When absent, the value of the let expression is `()`.
+    // TODO FIXME let is not an expression; it's a statement. It's not even an Expr in DSLX C++
+    // code:
+    // https://github.com/google/xls/blob/aad0d13240cc3ad413a03cc292e9d3acf1fb79c6/xls/dslx/frontend/parser.cc#L2452
     Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
 
     /// 1 or more `if` and `else if` expressions, followed by the final `else`'s alternate

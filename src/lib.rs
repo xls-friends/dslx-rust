@@ -402,7 +402,7 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
             parse_expression(None).map(BlockExpression),
             tag_ws("}"),
         )),
-        spanned(parse_let_expression),
+        spanned(parse_let_expression), // TODO FIXME let is not an expression
         spanned(parse_ifelse_expression),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
         spanned(parse_literal),
