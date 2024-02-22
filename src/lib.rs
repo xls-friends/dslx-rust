@@ -307,6 +307,8 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
         value(RawBinaryOperator::Greater, tag(">")),
         value(RawBinaryOperator::LessOrEqual, tag("<=")),
         value(RawBinaryOperator::Less, tag("<")),
+        // other
+        value(RawBinaryOperator::Range, tag("..")),
     ));
     spanned(op).parse(input)
 }
@@ -538,7 +540,7 @@ mod tests {
     fn expression_is_literal(x: Expr) -> RawLiteral {
         match x.thing {
             RawExpr::Literal(Spanned { span: _, thing }) => thing,
-            _ => panic!("wasn't Literal expression"),
+            e => panic!("wasn't Literal expression: {:?}", e),
         }
     }
 
@@ -1511,6 +1513,14 @@ mod tests {
             let _ = expression_is_literal(*lhs);
             let _ = expression_is_literal(*rhs);
         }
+
+        // range operator is lower precedence than boolean or
+        first_then(
+            "u1:0 || u1:0 .. u1:1",
+            RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
+            FirstsLocation::LeftHandSide,
+        );
     }
 
     // Tests parsing of expressions containing (), asserts that
