@@ -267,6 +267,9 @@ pub enum RawBinaryOperator {
 
     /// `||`, boolean or
     BooleanOr,
+
+    /// `..`, creates a range expression, e.g. `u32:0 .. u32:8`
+    Range,
 }
 
 pub type BinaryOperator = Spanned<RawBinaryOperator>;
@@ -292,6 +295,7 @@ impl RawBinaryOperator {
             RawBinaryOperator::Less => true,
             RawBinaryOperator::BooleanAnd => false,
             RawBinaryOperator::BooleanOr => false,
+            RawBinaryOperator::Range => false,
         }
     }
 }
@@ -364,10 +368,14 @@ impl PartialOrd for RawBinaryOperator {
                 (Self::BooleanAnd, _) => Some(Ordering::Greater),
                 (_, Self::BooleanAnd) => Some(Ordering::Less),
 
-                // We avoid a wildcard match so that we update this logic when new cases are added
+                (Self::BooleanOr, _) => Some(Ordering::Greater),
+                (_, Self::BooleanOr) => Some(Ordering::Less),
+
+                // This is required to satisfy the exhaustiveness checker.
                 //
-                // Required to satisfy the exhaustiveness checker
-                (Self::BooleanOr, Self::BooleanOr) => {
+                // We avoid a wildcard match so that we are forced to update this logic when
+                // new cases are added.
+                (Self::Range, Self::Range) => {
                     panic!("logically impossible because of PartialEq::eq(self, other) above")
                 }
             }
@@ -581,6 +589,7 @@ mod tests {
         is_reflexive(RawBinaryOperator::Less);
         is_reflexive(RawBinaryOperator::BooleanAnd);
         is_reflexive(RawBinaryOperator::BooleanOr);
+        is_reflexive(RawBinaryOperator::Range);
 
         // Multiply highest precedence
         let it = vec![
@@ -600,6 +609,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -633,6 +643,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -657,6 +668,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -676,6 +688,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -693,6 +706,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -709,6 +723,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -730,7 +745,12 @@ mod tests {
             same_precedence(ops[0], ops[1]);
         }
         // comparison next-highest precedence
-        let it = vec![RawBinaryOperator::BooleanAnd, RawBinaryOperator::BooleanOr].into_iter();
+        let it = vec![
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
+        ]
+        .into_iter();
         for op in it {
             this_greater_than_that(RawBinaryOperator::Equal, op);
             this_greater_than_that(RawBinaryOperator::NotEqual, op);
@@ -740,7 +760,15 @@ mod tests {
             this_greater_than_that(RawBinaryOperator::Less, op);
         }
 
-        // last two
-        this_greater_than_that(RawBinaryOperator::BooleanAnd, RawBinaryOperator::BooleanOr);
+        // next is BooleanAnd
+        let it = vec![RawBinaryOperator::BooleanOr, RawBinaryOperator::Range].into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::BooleanAnd, op);
+        }
+
+        // next is BooleanOr
+        this_greater_than_that(RawBinaryOperator::BooleanOr, RawBinaryOperator::Range);
+
+        // Range is lowest
     }
 }
