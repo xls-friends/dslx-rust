@@ -280,9 +280,8 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
     alt((
+        spanned(delimited(tag("("), parse_expression(None), tag_ws(")"))),
         spanned(parse_literal),
-        // TODO parse parenthesized expressions? see
-        // https://btmc.substack.com/p/how-to-parse-expressions-easy
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
     ))
     .parse(input)
@@ -330,7 +329,7 @@ fn parse_infix_expression<'a>(
 }
 
 /// Parses an expression (e.g. binary, unary, arbitrarily nested expressions), given the
-/// preceding binary operator (if one exists), returning all of this is a binary `Expression`.
+/// preceding binary operator (if one exists).
 ///
 /// E.g. input=`u1:1 && u1:1`, previous=`Some(||)`, will return the `Expression` `u1:1 && u1:1`
 /// because `&&` has higher precedence than `||`.
@@ -434,6 +433,14 @@ mod tests {
     ) -> (Box<Expression>, RawBinaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Binary(lhs, Spanned { span: _, thing: op }, rhs) => (lhs, op, rhs),
+            _ => panic!("wrong"),
+        }
+    }
+
+    // Panics if Expression is not the correct case
+    fn expression_is_parenthesized(x: Expression) -> Box<Expression> {
+        match x.thing {
+            RawExpression::Parenthesized(b) => b,
             _ => panic!("wrong"),
         }
     }
@@ -1223,28 +1230,28 @@ mod tests {
         let _ = expression_is_literal(*rhs);
     }
 
+    /// Is the operation that evalutes first in the LHS or RHS of the second operation?
+    enum FirstsLocation {
+        // matches a pattern like
+        //     s
+        //    / \
+        //   f   z
+        //  / \
+        // x   y
+        LeftHandSide,
+        // matches a pattern like
+        //     s
+        //    / \
+        //   z  f
+        //     / \
+        //    x   y
+        RightHandSide,
+    }
+
     // Tests parsing of expressions containing 2 (or 3) binary operators, asserts that
     // precedence is correctly reflected in the AST
     #[test]
     fn test_parse_binary_expression_precedence() -> () {
-        // Is the operation that evalutes first in the LHS or RHS of the second operation?
-        enum FirstsLocation {
-            // matches a pattern like
-            //     s
-            //    / \
-            //   f   z
-            //  / \
-            // x   y
-            LeftHandSide,
-            // matches a pattern like
-            //     s
-            //    / \
-            //   z  f
-            //     / \
-            //    x   y
-            RightHandSide,
-        }
-
         // Tests an expression containing two binary operators. Asserts that `first` is the
         // operation that will be evaluated first, followed by `second`
         fn first_then(
@@ -1351,6 +1358,125 @@ mod tests {
             let _ = expression_is_literal(*lhs);
             let _ = expression_is_literal(*rhs);
         }
+    }
+
+    // Tests parsing of expressions containing (), asserts that
+    // precedence is correctly reflected in the AST
+    #[test]
+    fn test_parse_parenthesized_expression_precedence() -> () {
+        // Tests an expression containing two binary operators. Asserts that `first` is the
+        // operation that will be evaluated first, followed by `second`
+        fn first_then(
+            s: &str,
+            first: RawBinaryOperator,
+            second: RawBinaryOperator,
+            loc: FirstsLocation,
+        ) -> () {
+            let (lhs, op, rhs) = expression_is_binary(
+                all_consuming(parse_expression(None))(ParseInput::new(s))
+                    .unwrap()
+                    .1,
+            );
+
+            // The operation that occurs second will be outermost
+            assert_eq!(op, second);
+            match loc {
+                FirstsLocation::LeftHandSide => {
+                    let _ = expression_is_literal(*rhs);
+                    let (lhs, op, rhs) = expression_is_binary(*expression_is_parenthesized(*lhs));
+                    assert_eq!(op, first);
+                    let _ = expression_is_literal(*lhs);
+                    let _ = expression_is_literal(*rhs);
+                }
+                FirstsLocation::RightHandSide => {
+                    let _ = expression_is_literal(*lhs);
+                    let (lhs, op, rhs) = expression_is_binary(*expression_is_parenthesized(*rhs));
+                    assert_eq!(op, first);
+                    let _ = expression_is_literal(*lhs);
+                    let _ = expression_is_literal(*rhs);
+                }
+            }
+        }
+
+        // mismatched/interleaved parens is wrong
+        parse_expression(None)(ParseInput::new("(u1:1(+)u1:1)")).expect_err("");
+        parse_expression(None)(ParseInput::new("(u1:1(+u1:1))")).expect_err("");
+        // fix the above
+        parse_expression(None)(ParseInput::new("((u1:1+u1:1))")).expect("");
+
+        // whitespace accepted
+        all_consuming(parse_expression(None))(ParseInput::new(" ( u1:1+u1:1 )")).expect("");
+
+        // ordinarily, add is lower prec.
+        first_then(
+            "u1:1 * (u2:2 + u3:3)",
+            RawBinaryOperator::Add,
+            RawBinaryOperator::Multiply,
+            FirstsLocation::RightHandSide,
+        );
+        first_then(
+            "(u1:1 + u1:1) * u1:1",
+            RawBinaryOperator::Add,
+            RawBinaryOperator::Multiply,
+            FirstsLocation::LeftHandSide,
+        );
+
+        // ordinarily, boolean OR is lowest prec.
+        first_then(
+            "u1:1 * (u1:1 || u1:1)",
+            RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Multiply,
+            FirstsLocation::RightHandSide,
+        );
+        first_then(
+            "(u1:1 || u1:1) * u1:1",
+            RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Multiply,
+            FirstsLocation::LeftHandSide,
+        );
+
+        // add and subtract are same precedence, ordinarily left associative
+        first_then(
+            "u1:1 + (u1:1 - u1:1)",
+            RawBinaryOperator::Subtract,
+            RawBinaryOperator::Add,
+            FirstsLocation::RightHandSide,
+        );
+        first_then(
+            "u1:1 - (u2:2 + u3:3)",
+            RawBinaryOperator::Add,
+            RawBinaryOperator::Subtract,
+            FirstsLocation::RightHandSide,
+        );
+        // now force left association
+        first_then(
+            "(u1:1 + u1:1) - u1:1",
+            RawBinaryOperator::Add,
+            RawBinaryOperator::Subtract,
+            FirstsLocation::LeftHandSide,
+        );
+        first_then(
+            "(u1:1 - u2:2) + u3:3",
+            RawBinaryOperator::Subtract,
+            RawBinaryOperator::Add,
+            FirstsLocation::LeftHandSide,
+        );
+
+        // two parens changes nothing
+        {
+            let first = RawBinaryOperator::BooleanOr;
+            let (_lhs, _, rhs) = expression_is_binary(
+                all_consuming(parse_expression(None))(ParseInput::new("u1:1 * ((u1:1 || u1:1))"))
+                    .unwrap()
+                    .1,
+            );
+
+            let expr = expression_is_parenthesized(*rhs);
+            let (lhs, op, rhs) = expression_is_binary(*expression_is_parenthesized(*expr));
+            let _ = expression_is_literal(*lhs);
+            let _ = expression_is_literal(*rhs);
+            assert_eq!(op, first);
+        };
     }
 
     // Test that spans are correct
