@@ -530,6 +530,7 @@ fn parse_expression<'a>(
     }
 }
 
+// TODO PR suggestion: move all tests to own file
 #[cfg(test)]
 mod tests {
     use super::*;
