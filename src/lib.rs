@@ -87,7 +87,7 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
     spanned(p).parse(input)
 }
 
-/// Parses a variable declaration, e.g., `x : u32`.
+/// Parses a variable declaration, e.g., `x: u32`.
 fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDecl> {
     spanned(tuple((
         parse_identifier,
@@ -1554,6 +1554,9 @@ mod tests {
 
     #[test]
     fn test_parse_let_expression() -> () {
+        // whitespace accepted
+        all_consuming(parse_expression(None))(ParseInput::new("let  foo : u32 = bar;")).expect("");
+
         // test the first variable decl, and the using expression
         let s = r"let a: u32 = u32:1 * u32:2;
         a & a";
