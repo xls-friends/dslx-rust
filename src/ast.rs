@@ -149,10 +149,10 @@ pub struct Usize(pub u32);
 /// See <https://google.github.io/xls/dslx_reference/#bit-type>
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawBitType {
-    /// a bit type is differentiated on if it's signed or unsigned
+    /// A bit type is differentiated on if it's signed or unsigned.
     pub signedness: Signedness,
 
-    /// width, in bits
+    /// Width, in bits
     pub width: Usize,
 }
 

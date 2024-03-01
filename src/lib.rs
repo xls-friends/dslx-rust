@@ -1230,7 +1230,7 @@ mod tests {
         let _ = expression_is_literal(*rhs);
     }
 
-    // Is the operation that evalutes first in the LHS or RHS of the second operation?
+    /// Is the operation that evalutes first in the LHS or RHS of the second operation?
     enum FirstsLocation {
         // matches a pattern like
         //     s
@@ -1465,7 +1465,7 @@ mod tests {
         // two parens changes nothing
         {
             let first = RawBinaryOperator::BooleanOr;
-            let (_lhs, _opp, rhs) = expression_is_binary(
+            let (_lhs, _, rhs) = expression_is_binary(
                 all_consuming(parse_expression(None))(ParseInput::new("u1:1 * ((u1:1 || u1:1))"))
                     .unwrap()
                     .1,
