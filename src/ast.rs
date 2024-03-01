@@ -92,8 +92,8 @@ pub struct RawVariableDeclaration {
     pub typ: Identifier,
 }
 
-pub type VariableDeclaration = Spanned<RawVariableDeclaration>;
-pub type VariableDeclarationList = Spanned<Vec<VariableDeclaration>>;
+pub type VariableDecl = Spanned<RawVariableDeclaration>;
+pub type VariableDeclList = Spanned<Vec<VariableDecl>>;
 
 impl From<(Identifier, Identifier)> for RawVariableDeclaration {
     fn from((name, typ): (Identifier, Identifier)) -> Self {
@@ -105,16 +105,14 @@ impl From<(Identifier, Identifier)> for RawVariableDeclaration {
 #[derive(Debug, PartialEq)]
 pub struct RawFunctionSignature {
     pub name: Identifier,
-    pub parameters: VariableDeclarationList,
+    pub parameters: VariableDeclList,
     pub result_type: Identifier,
 }
 
 pub type FunctionSignature = Spanned<RawFunctionSignature>;
 
-impl From<(Identifier, VariableDeclarationList, Identifier)> for RawFunctionSignature {
-    fn from(
-        (name, parameters, result_type): (Identifier, VariableDeclarationList, Identifier),
-    ) -> Self {
+impl From<(Identifier, VariableDeclList, Identifier)> for RawFunctionSignature {
+    fn from((name, parameters, result_type): (Identifier, VariableDeclList, Identifier)) -> Self {
         RawFunctionSignature {
             name,
             parameters,
@@ -372,7 +370,7 @@ impl PartialOrd for RawBinaryOperator {
 /// is the expression in which the bound name is in-scope.
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLetBinding {
-    pub variable_declaration: VariableDeclaration,
+    pub variable_declaration: VariableDecl,
     pub value: Box<Expression>,
 }
 pub type LetBinding = Spanned<RawLetBinding>;

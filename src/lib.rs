@@ -90,7 +90,7 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
 }
 
 /// Parses a variable declaration, e.g., `x : u32`.
-fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDeclaration> {
+fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDecl> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -100,7 +100,7 @@ fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDeclarat
 
 /// Parses a comma-separated list of variable declarations, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
-fn parse_parameter_list0(input: ParseInput) -> ParseResult<VariableDeclarationList> {
+fn parse_parameter_list0(input: ParseInput) -> ParseResult<VariableDeclList> {
     // TODO C++ DSLX allows a single trailing comma. Parse/allow that here.
     spanned(separated_list0(tag_ws(","), parse_variable_declaration))(input)
 }
@@ -649,9 +649,9 @@ mod tests {
                     span: Span::from(((3, 1, 4), (8, 1, 9))),
                     thing: RawIdentifier("add_1".to_owned()),
                 },
-                parameters: VariableDeclarationList {
+                parameters: VariableDeclList {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
-                    thing: vec![VariableDeclaration {
+                    thing: vec![VariableDecl {
                         span: Span::from(((9, 1, 10), (15, 1, 16))),
                         thing: RawVariableDeclaration {
                             name: Identifier {
