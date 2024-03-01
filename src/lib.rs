@@ -15,10 +15,8 @@ use ast::*;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
-    character::complete::hex_digit1,
-    character::complete::{alpha1, alphanumeric1, char, digit1, satisfy},
-    combinator::verify,
-    combinator::{flat_map, map_opt, map_res, not, opt, peek, recognize, success, value},
+    character::complete::{alpha1, alphanumeric1, char, digit1, hex_digit1, satisfy},
+    combinator::{flat_map, map_opt, map_res, not, opt, peek, recognize, success, value, verify},
     multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
