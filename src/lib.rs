@@ -389,39 +389,6 @@ fn parse_ifelse_expression<'a>(
     tuple((ifelses, alternate)).parse(input)
 }
 
-// TODO delete this function. Save (some? none?) of the comment.
-/// Parses an expression that produces a 'range', that is: `expr .. expr` expression. E.g.
-/// `u32:0..u32:8`
-fn parse_range_expression<'a>(input: ParseInput<'a>) -> () {
-    // XLS parser does
-    // https://github.com/google/xls/blob/main/xls/dslx/frontend/parser.cc#L555
-    // ParseLogicalOrExpression
-    // match `..`
-    // ParseLogicalOrExpression
-    // It seems that ParseLogicalOrExpression will match
-    // logical or, logical and, one of the comparison expressions, bitwise or, bitwise xor,
-    // bitwise and, weak arithmetic, strong arithmetic, ParseCastAsExpression
-    // https://github.com/google/xls/blob/main/xls/dslx/frontend/parser.cc#L2005 calls ParseTerm
-    // which calls ParseTermLhs
-    // https://github.com/google/xls/blob/main/xls/dslx/frontend/parser.cc#L1541
-    // ParseTermLhs is complex, but it seems equivalent to parse_unary_atomic_expression. For
-    // example, it matches identifiers, parenthesized expressions, unary expressions (negate
-    // and invert), numeric literals, `if` expressions, `match` expression, etc.
-    // However! ParseTermLhs does not seem to accept `let` expr or block expr (`{ } `).
-
-    // https://github.com/google/xls/blob/aad0d13240cc3ad413a03cc292e9d3acf1fb79c6/xls/dslx/frontend/parser.cc#L524
-    // ParseExpression is illustrative. It accepts:
-    // for, unroll for, channel, spawn, brace, and ParseConditionalExpression
-
-    // So it seems like I should treat `..` as a type of binary expression, a range expression.
-    // What is its precedence?
-    // Parser::ParseConditionalExpression calls ParseRangeExpression when there is no leading
-    // `if` keyword.
-    // ParseRangeExpression calls ParseLogicalOrExpression, saving the Expr. If the next token
-    // is `..`, then ParseLogicalOrExpression is called again, and a Range Expr is returned. So
-    // I think we'd say that the `..` has lower precedence than logical or.
-}
-
 /// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
 fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
