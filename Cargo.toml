@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
+# This is needed so that we can document Block expressions with a snippet of DSLX, which is not
+# valid Rust syntax, which pisses off doctest.
 doctest = false
 
 [dependencies]
