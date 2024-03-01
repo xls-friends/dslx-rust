@@ -340,7 +340,7 @@ fn parse_let_expression(
     // overflows when fuzzing.
     let bindings = many1(spanned(parse_let_binding)).map(|xs| {
         let mut ys = NonEmpty::new(xs.first().unwrap().clone());
-        ys.extend(xs.iter().skip(1).cloned());
+        ys.extend(xs.into_iter().skip(1));
         ys
     });
 
