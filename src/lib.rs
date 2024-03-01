@@ -514,9 +514,9 @@ mod tests {
     }
 
     // Panics if Expression is not the correct case
-    fn expression_is_variable(x: Expression) -> RawIdentifier {
+    fn expression_is_binding(x: Expression) -> RawIdentifier {
         match x.thing {
-            RawExpression::Variable(Spanned { span: _, thing }) => thing,
+            RawExpression::Binding(Spanned { span: _, thing }) => thing,
             _ => panic!("wasn't Literal expression"),
         }
     }
@@ -1739,15 +1739,15 @@ mod tests {
         );
         assert_eq!(condition_consequent.len(), 1);
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
             RawIdentifier("condition".to_owned())
         );
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
             RawIdentifier("whentrue".to_owned())
         );
         assert_eq!(
-            expression_is_variable(*alternate),
+            expression_is_binding(*alternate),
             RawIdentifier("whenfalse".to_owned())
         );
 
@@ -1763,15 +1763,15 @@ mod tests {
         let (condition_consequent, alternate) = expression_is_ifelse(*rhs);
         assert_eq!(condition_consequent.len(), 1);
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
             RawIdentifier("condition".to_owned())
         );
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
             RawIdentifier("whentrue".to_owned())
         );
         assert_eq!(
-            expression_is_variable(*alternate),
+            expression_is_binding(*alternate),
             RawIdentifier("whenfalse".to_owned())
         );
 
@@ -1787,15 +1787,15 @@ mod tests {
         let (condition_consequent, alternate) = expression_is_ifelse(*lhs);
         assert_eq!(condition_consequent.len(), 1);
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
             RawIdentifier("condition".to_owned())
         );
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
             RawIdentifier("whentrue".to_owned())
         );
         assert_eq!(
-            expression_is_variable(*alternate),
+            expression_is_binding(*alternate),
             RawIdentifier("whenfalse".to_owned())
         );
     }
@@ -1811,23 +1811,23 @@ mod tests {
         );
         assert_eq!(condition_consequent.len(), 2);
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.condition.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
             RawIdentifier("condition".to_owned())
         );
         assert_eq!(
-            expression_is_variable((*condition_consequent[0]).thing.consequent.clone()),
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
             RawIdentifier("whentrue".to_owned())
         );
         assert_eq!(
-            expression_is_variable((*condition_consequent[1]).thing.condition.clone()),
+            expression_is_binding((*condition_consequent[1]).thing.condition.clone()),
             RawIdentifier("condition2".to_owned())
         );
         assert_eq!(
-            expression_is_variable((*condition_consequent[1]).thing.consequent.clone()),
+            expression_is_binding((*condition_consequent[1]).thing.consequent.clone()),
             RawIdentifier("whentrue2".to_owned())
         );
         assert_eq!(
-            expression_is_variable(*alternate),
+            expression_is_binding(*alternate),
             RawIdentifier("whenfalse".to_owned())
         );
     }
