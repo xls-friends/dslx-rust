@@ -337,7 +337,9 @@ fn parse_let_expression(
     }
 
     // We avoid a recursive parsing implementation of nested let expressions to avoid stack
-    // overflows when fuzzing.
+    // overflows when fuzzing. Furthermore, we want to be as robust as possible, and not make
+    // assumptions about the user (i.e. not assume the user is going to limit their nesting of
+    // lets).
     let bindings = many1(spanned(parse_let_binding)).map(|xs| {
         let mut ys = NonEmpty::new(xs.first().unwrap().clone());
         ys.extend(xs.into_iter().skip(1));
