@@ -221,6 +221,7 @@ pub struct ParenthesizedExpression(pub Expression);
 /// <https://google.github.io/xls/dslx_reference/#shift-expressions>
 /// <https://google.github.io/xls/dslx_reference/#comparison-expressions>
 /// <https://google.github.io/xls/dslx_reference/#concat-expression>
+/// <https://google.github.io/xls/dslx_reference/#iterable-expression>
 ///
 /// They are ordered from highest precedence to lowest, and grouped when same precedence.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -268,7 +269,10 @@ pub enum RawBinaryOperator {
     /// `||`, boolean or
     BooleanOr,
 
-    /// `..`, creates a range expression, e.g. `u32:0 .. u32:8`
+    /// `..`, creates a range expression, e.g. `u32:0 .. u32:8`, which expands to the integral
+    /// values [0, 8). Currently, only the Rust RangeExpr form is supported
+    /// (https://doc.rust-lang.org/reference/expressions/range-expr.html), i.e., the 5 other
+    /// variants are not implemented (RangeFromExpr, RangeToExpr, etc.).
     Range,
 }
 
