@@ -388,9 +388,8 @@ pub enum RawExpression {
     /// A literal, e.g. `s4:0b1001`
     Literal(Literal),
 
-    /// A variable, e.g. `x`. A name bound to a value (e.g. by a previous `let` expression, or
-    /// a function argument).
-    Variable(Identifier),
+    /// A name bound to a value (e.g. by a previous `let` expression, or a function argument).
+    Binding(Identifier),
 
     /// An expression that's surrounded by an open and close parentheses. The expression inside
     /// the parentheses will be evaluated with the highest precedence.
@@ -419,7 +418,7 @@ impl From<Literal> for RawExpression {
 
 impl From<Identifier> for RawExpression {
     fn from(x: Identifier) -> Self {
-        RawExpression::Variable(x)
+        RawExpression::Binding(x)
     }
 }
 
