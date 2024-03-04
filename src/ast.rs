@@ -87,17 +87,17 @@ impl<'a> From<ParseInput<'a>> for RawIdentifier {
 /// Introduces a variable with its name and type, e.g., `foo : MyType`. E.g. used in function
 /// type signature parameter lists, `let` bindings, etc.
 #[derive(Debug, PartialEq, Clone)]
-pub struct RawVariableDeclaration {
+pub struct RawBindingDecl {
     pub name: Identifier,
     pub typ: Identifier,
 }
 
-pub type VariableDecl = Spanned<RawVariableDeclaration>;
-pub type VariableDeclList = Spanned<Vec<VariableDecl>>;
+pub type BindingDecl = Spanned<RawBindingDecl>;
+pub type BindingDeclList = Spanned<Vec<BindingDecl>>;
 
-impl From<(Identifier, Identifier)> for RawVariableDeclaration {
+impl From<(Identifier, Identifier)> for RawBindingDecl {
     fn from((name, typ): (Identifier, Identifier)) -> Self {
-        RawVariableDeclaration { name, typ }
+        RawBindingDecl { name, typ }
     }
 }
 
@@ -105,14 +105,14 @@ impl From<(Identifier, Identifier)> for RawVariableDeclaration {
 #[derive(Debug, PartialEq)]
 pub struct RawFunctionSignature {
     pub name: Identifier,
-    pub parameters: VariableDeclList,
+    pub parameters: BindingDeclList,
     pub result_type: Identifier,
 }
 
 pub type FunctionSignature = Spanned<RawFunctionSignature>;
 
-impl From<(Identifier, VariableDeclList, Identifier)> for RawFunctionSignature {
-    fn from((name, parameters, result_type): (Identifier, VariableDeclList, Identifier)) -> Self {
+impl From<(Identifier, BindingDeclList, Identifier)> for RawFunctionSignature {
+    fn from((name, parameters, result_type): (Identifier, BindingDeclList, Identifier)) -> Self {
         RawFunctionSignature {
             name,
             parameters,
@@ -370,7 +370,7 @@ impl PartialOrd for RawBinaryOperator {
 /// is the expression in which the bound name is in-scope.
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLetBinding {
-    pub variable_declaration: VariableDecl,
+    pub variable_declaration: BindingDecl,
     pub value: Box<Expression>,
 }
 pub type LetBinding = Spanned<RawLetBinding>;

@@ -88,7 +88,7 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
 }
 
 /// Parses a variable declaration, e.g., `x: u32`.
-fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDecl> {
+fn parse_variable_declaration(input: ParseInput) -> ParseResult<BindingDecl> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -98,7 +98,7 @@ fn parse_variable_declaration(input: ParseInput) -> ParseResult<VariableDecl> {
 
 /// Parses a comma-separated list of variable declarations, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
-fn parse_parameter_list0(input: ParseInput) -> ParseResult<VariableDeclList> {
+fn parse_parameter_list0(input: ParseInput) -> ParseResult<BindingDeclList> {
     // TODO C++ DSLX allows a single trailing comma. Parse/allow that here.
     spanned(separated_list0(tag_ws(","), parse_variable_declaration))(input)
 }
@@ -579,7 +579,7 @@ mod tests {
             p,
             Spanned {
                 span: Span::from(((1, 1, 2), (7, 1, 8))),
-                thing: RawVariableDeclaration {
+                thing: RawBindingDecl {
                     name: Spanned {
                         span: Span::from(((1, 1, 2), (2, 1, 3))),
                         thing: RawIdentifier("x".to_owned())
@@ -609,7 +609,7 @@ mod tests {
                 thing: vec![
                     Spanned {
                         span: Span::from(((0, 1, 1), (6, 1, 7))),
-                        thing: RawVariableDeclaration {
+                        thing: RawBindingDecl {
                             name: Spanned {
                                 span: Span::from(((0, 1, 1), (1, 1, 2))),
                                 thing: RawIdentifier("x".to_owned())
@@ -622,7 +622,7 @@ mod tests {
                     },
                     Spanned {
                         span: Span::from(((7, 1, 8), (13, 1, 14))),
-                        thing: RawVariableDeclaration {
+                        thing: RawBindingDecl {
                             name: Spanned {
                                 span: Span::from(((7, 1, 8), (8, 1, 9))),
                                 thing: RawIdentifier("y".to_owned())
@@ -649,11 +649,11 @@ mod tests {
                     span: Span::from(((3, 1, 4), (8, 1, 9))),
                     thing: RawIdentifier("add_1".to_owned()),
                 },
-                parameters: VariableDeclList {
+                parameters: BindingDeclList {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
-                    thing: vec![VariableDecl {
+                    thing: vec![BindingDecl {
                         span: Span::from(((9, 1, 10), (15, 1, 16))),
-                        thing: RawVariableDeclaration {
+                        thing: RawBindingDecl {
                             name: Identifier {
                                 span: Span::from(((9, 1, 10), (10, 1, 11))),
                                 thing: RawIdentifier("x".to_owned()),
