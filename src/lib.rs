@@ -307,6 +307,8 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
         value(RawBinaryOperator::Greater, tag(">")),
         value(RawBinaryOperator::LessOrEqual, tag("<=")),
         value(RawBinaryOperator::Less, tag("<")),
+        // other
+        value(RawBinaryOperator::Range, tag("..")),
     ));
     spanned(op).parse(input)
 }
@@ -403,7 +405,7 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expr> {
             parse_expression(None).map(BlockExpr),
             tag_ws("}"),
         )),
-        spanned(parse_let_expression),
+        spanned(parse_let_expression), // TODO FIXME let is not an expression
         spanned(parse_ifelse_expression),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
         spanned(parse_literal),
@@ -438,14 +440,12 @@ fn parse_infix_expression<'a>(left: Expr) -> impl FnMut(ParseInput<'a>) -> Parse
             ))
         })
         .map(|(left, op, right)| {
-            let thing = RawExpr::from((left.clone(), op, right.clone()));
-            Spanned {
-                span: Span {
-                    start: left.span.start,
-                    end: right.span.end,
-                },
-                thing,
-            }
+            let span = Span {
+                start: left.span.start.clone(),
+                end: right.span.end.clone(),
+            };
+            let thing = RawExpr::from((left, op, right));
+            Spanned { span, thing }
         })
         .parse(input)
     }
@@ -496,6 +496,7 @@ fn parse_expression<'a>(
     }
 }
 
+// TODO PR suggestion: move all tests to own file
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,7 +508,7 @@ mod tests {
     fn expression_is_literal(x: Expr) -> RawLiteral {
         match x.thing {
             RawExpr::Literal(Spanned { span: _, thing }) => thing,
-            _ => panic!("wasn't Literal expression"),
+            e => panic!("wasn't Literal expression: {:?}", e),
         }
     }
 
@@ -1480,6 +1481,14 @@ mod tests {
             let _ = expression_is_literal(*lhs);
             let _ = expression_is_literal(*rhs);
         }
+
+        // range operator is lower precedence than boolean or
+        first_then(
+            "u1:0 || u1:0 .. u1:1",
+            RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
+            FirstsLocation::LeftHandSide,
+        );
     }
 
     // Tests parsing of expressions containing (), asserts that
