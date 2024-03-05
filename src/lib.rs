@@ -15,14 +15,13 @@ use ast::*;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
-    character::complete::hex_digit1,
-    character::complete::{alpha1, alphanumeric1, char, digit1},
-    combinator::verify,
-    combinator::{flat_map, map_opt, map_res, not, opt, peek, recognize, success, value},
-    multi::{many0, separated_list0, separated_list1},
+    character::complete::{alpha1, alphanumeric1, char, digit1, hex_digit1, satisfy},
+    combinator::{flat_map, map_opt, map_res, not, opt, peek, recognize, success, value, verify},
+    multi::{many0, many1, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult, Parser,
 };
+use nonempty::NonEmpty;
 use num_bigint::{BigInt, BigUint};
 use std::cmp::Ordering::Greater;
 
@@ -45,6 +44,11 @@ pub fn tag_ws<'a>(to_match: &'a str) -> impl FnMut(ParseInput<'a>) -> ParseResul
 /// Returns the current position after consuming preceding whitespace.
 pub fn position_ws<'a>() -> impl FnMut(ParseInput<'a>) -> ParseResult<ParseInput<'a>> {
     preceding_whitespace(nom_locate::position)
+}
+
+/// A parser that consumes exactly 1 whitespace character.
+pub fn whitespace_exactly1(input: ParseInput) -> ParseResult<()> {
+    value((), satisfy(|c: char| c.is_whitespace())).parse(input)
 }
 
 /// Returns a parser that captures the span encompassing the entirety of the given parser's
@@ -83,8 +87,8 @@ pub fn parse_identifier(input: ParseInput) -> ParseResult<Identifier> {
     spanned(p).parse(input)
 }
 
-/// Parses a single param, e.g., `x: u32`.
-fn parse_param(input: ParseInput) -> ParseResult<Parameter> {
+/// Parses a variable declaration, e.g., `x: u32`.
+fn parse_variable_declaration(input: ParseInput) -> ParseResult<BindingDecl> {
     spanned(tuple((
         parse_identifier,
         preceded(tag_ws(":"), parse_identifier),
@@ -92,17 +96,18 @@ fn parse_param(input: ParseInput) -> ParseResult<Parameter> {
     .parse(input)
 }
 
-/// Parses a comma-separated list of params, e.g., `x: u32, y: MyCustomType`.
+/// Parses a comma-separated list of variable declarations, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
-fn parse_param_list0(input: ParseInput) -> ParseResult<ParameterList> {
-    spanned(separated_list0(tag_ws(","), parse_param))(input)
+fn parse_parameter_list0(input: ParseInput) -> ParseResult<BindingDeclList> {
+    // TODO C++ DSLX allows a single trailing comma. Parse/allow that here.
+    spanned(separated_list0(tag_ws(","), parse_variable_declaration))(input)
 }
 
 /// Parses a function signature, e.g.:
 /// `fn foo(a: u32, b: u64) -> uN[128]`
 fn parse_function_signature(input: ParseInput) -> ParseResult<FunctionSignature> {
     let name = preceded(tag_ws("fn"), parse_identifier);
-    let parameters = delimited(tag_ws("("), parse_param_list0, tag_ws(")"));
+    let parameters = delimited(tag_ws("("), parse_parameter_list0, tag_ws(")"));
     let ret_type = preceded(tag_ws("->"), parse_identifier);
     spanned(tuple((name, parameters, ret_type))).parse(input)
 }
@@ -275,14 +280,90 @@ fn parse_unary_operator(input: ParseInput) -> ParseResult<UnaryOperator> {
     spanned(op).parse(input)
 }
 
-/// Parses unary and atomic expressions. E.g., `-u1:1`, `u1:1`
+/// Parses a binary operator. E.g. `|`, `&`, etc.
+fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
+    let op = alt((
+        // These two must match before | and &
+        value(RawBinaryOperator::BooleanOr, tag("||")),
+        value(RawBinaryOperator::BooleanAnd, tag("&&")),
+        // now match | and &
+        value(RawBinaryOperator::BitwiseOr, tag("|")),
+        value(RawBinaryOperator::BitwiseAnd, tag("&")),
+        value(RawBinaryOperator::BitwiseXor, tag("^")),
+        // concatenate must match before +
+        value(RawBinaryOperator::Concatenate, tag("++")),
+        // the order of these does not matter
+        // arithmetic
+        value(RawBinaryOperator::Add, tag("+")),
+        value(RawBinaryOperator::Subtract, tag("-")),
+        value(RawBinaryOperator::Multiply, tag("*")),
+        // shift
+        value(RawBinaryOperator::ShiftRight, tag(">>")),
+        value(RawBinaryOperator::ShiftLeft, tag("<<")),
+        // compare
+        value(RawBinaryOperator::Equal, tag("==")),
+        value(RawBinaryOperator::NotEqual, tag("!=")),
+        value(RawBinaryOperator::GreaterOrEqual, tag(">=")),
+        value(RawBinaryOperator::Greater, tag(">")),
+        value(RawBinaryOperator::LessOrEqual, tag("<=")),
+        value(RawBinaryOperator::Less, tag("<")),
+    ));
+    spanned(op).parse(input)
+}
+
+/// Parses a let expression. E.g. `let x : u32 = a + u32:1; x`
+///
+/// Note the trailing expression `x`. It is part of the let expression. It is common to have an
+/// expression after the let (after all, what's the point of declaring a variable binding if
+/// you're never going to use the variable?), but not required. So the trailing expression is
+/// optional.
+fn parse_let_expression(
+    input: ParseInput,
+) -> ParseResult<(NonEmpty<LetBinding>, Option<Expression>)> {
+    fn parse_let_binding(input: ParseInput) -> ParseResult<RawLetBinding> {
+        let var_decl = delimited(
+            // let must be followed by at least 1 whitespace
+            tuple((tag_ws("let"), whitespace_exactly1)),
+            parse_variable_declaration,
+            tag_ws("="),
+        );
+        let bound_expr = terminated(parse_expression(None), tag_ws(";"));
+        tuple((var_decl, bound_expr))
+            .map(|(variable_declaration, value)| RawLetBinding {
+                variable_declaration,
+                value: Box::new(value),
+            })
+            .parse(input)
+    }
+
+    // We avoid a recursive parsing implementation of nested let expressions to avoid stack
+    // overflows when fuzzing. Furthermore, we want to be as robust as possible, and not make
+    // assumptions about the user (i.e. not assume the user is going to limit their nesting of
+    // lets).
+    let bindings = many1(spanned(parse_let_binding)).map(|xs| {
+        let mut ys = NonEmpty::new(xs.first().unwrap().clone());
+        ys.extend(xs.into_iter().skip(1));
+        ys
+    });
+
+    let using_expr = opt(parse_expression(None));
+    tuple((bindings, using_expr)).parse(input)
+}
+
+/// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
 fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
     alt((
-        spanned(delimited(tag("("), parse_expression(None), tag_ws(")"))),
-        spanned(parse_literal),
+        spanned(delimited(
+            tag("("),
+            parse_expression(None).map(ParenthesizedExpression),
+            tag_ws(")"),
+        )),
+        spanned(parse_let_expression),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
+        spanned(parse_literal),
+        spanned(parse_identifier),
     ))
     .parse(input)
 }
@@ -373,37 +454,6 @@ fn parse_expression<'a>(
     }
 }
 
-/// Parses a binary operator. E.g. `|`, `&`, etc.
-fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
-    let op = alt((
-        // These two must match before | and &
-        value(RawBinaryOperator::BooleanOr, tag("||")),
-        value(RawBinaryOperator::BooleanAnd, tag("&&")),
-        // now match | and &
-        value(RawBinaryOperator::BitwiseOr, tag("|")),
-        value(RawBinaryOperator::BitwiseAnd, tag("&")),
-        value(RawBinaryOperator::BitwiseXor, tag("^")),
-        // concatenate must match before +
-        value(RawBinaryOperator::Concatenate, tag("++")),
-        // the order of these does not matter
-        // arithmetic
-        value(RawBinaryOperator::Add, tag("+")),
-        value(RawBinaryOperator::Subtract, tag("-")),
-        value(RawBinaryOperator::Multiply, tag("*")),
-        // shift
-        value(RawBinaryOperator::ShiftRight, tag(">>")),
-        value(RawBinaryOperator::ShiftLeft, tag("<<")),
-        // compare
-        value(RawBinaryOperator::Equal, tag("==")),
-        value(RawBinaryOperator::NotEqual, tag("!=")),
-        value(RawBinaryOperator::GreaterOrEqual, tag(">=")),
-        value(RawBinaryOperator::Greater, tag(">")),
-        value(RawBinaryOperator::LessOrEqual, tag("<=")),
-        value(RawBinaryOperator::Less, tag("<")),
-    ));
-    spanned(op).parse(input)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,7 +465,7 @@ mod tests {
     fn expression_is_literal(x: Expression) -> RawLiteral {
         match x.thing {
             RawExpression::Literal(Spanned { span: _, thing }) => thing,
-            _ => panic!("wrong"),
+            _ => panic!("wasn't literal expression"),
         }
     }
 
@@ -423,7 +473,7 @@ mod tests {
     fn expression_is_unary(x: Expression) -> (RawUnaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Unary(Spanned { span: _, thing }, expr) => (thing, expr),
-            _ => panic!("wrong"),
+            _ => panic!("wasn't unary expression"),
         }
     }
 
@@ -433,7 +483,7 @@ mod tests {
     ) -> (Box<Expression>, RawBinaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Binary(lhs, Spanned { span: _, thing: op }, rhs) => (lhs, op, rhs),
-            _ => panic!("wrong"),
+            _ => panic!("wasn't binary expression"),
         }
     }
 
@@ -441,7 +491,15 @@ mod tests {
     fn expression_is_parenthesized(x: Expression) -> Box<Expression> {
         match x.thing {
             RawExpression::Parenthesized(b) => b,
-            _ => panic!("wrong"),
+            _ => panic!("wasn't parenthesized expression"),
+        }
+    }
+
+    // Panics if Expression is not the correct case
+    fn expression_is_let(x: Expression) -> (NonEmpty<LetBinding>, Option<Box<Expression>>) {
+        match x.thing {
+            RawExpression::Let(xs, e) => (xs, e),
+            _ => panic!("wasn't let expression"),
         }
     }
 
@@ -497,7 +555,7 @@ mod tests {
                     unsafe { LocatedSpan::new_from_raw_offset(10, 1, "! ", (),) },
                     Spanned {
                         span: Span::from(((1, 1, 2), (10, 1, 11))),
-                        thing: RawIdentifier { name: "_foo23Bar" }
+                        thing: RawIdentifier("_foo23Bar".to_owned())
                     }
                 ),
             ),
@@ -509,8 +567,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_param() -> () {
-        let p = match parse_param(ParseInput::new(" x : u2 ")) {
+    fn test_parse_variable_declaration() -> () {
+        let p = match parse_variable_declaration(ParseInput::new(" x : u2 ")) {
             Ok(x) => x.1,
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -521,14 +579,14 @@ mod tests {
             p,
             Spanned {
                 span: Span::from(((1, 1, 2), (7, 1, 8))),
-                thing: RawParameter {
+                thing: RawBindingDecl {
                     name: Spanned {
                         span: Span::from(((1, 1, 2), (2, 1, 3))),
-                        thing: RawIdentifier { name: "x" }
+                        thing: RawIdentifier("x".to_owned())
                     },
-                    param_type: Spanned {
+                    typ: Spanned {
                         span: Span::from(((5, 1, 6), (7, 1, 8))),
-                        thing: RawIdentifier { name: "u2" }
+                        thing: RawIdentifier("u2".to_owned())
                     }
                 }
             }
@@ -536,8 +594,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_param_list2() -> () {
-        let p = match parse_param_list0(ParseInput::new("x : u2,y : u4")) {
+    fn test_parse_parameter_list0() -> () {
+        let p = match parse_parameter_list0(ParseInput::new("x : u2,y : u4")) {
             Ok(x) => x.1,
             Err(e) => {
                 eprintln!("Error: {}", e);
@@ -551,27 +609,27 @@ mod tests {
                 thing: vec![
                     Spanned {
                         span: Span::from(((0, 1, 1), (6, 1, 7))),
-                        thing: RawParameter {
+                        thing: RawBindingDecl {
                             name: Spanned {
                                 span: Span::from(((0, 1, 1), (1, 1, 2))),
-                                thing: RawIdentifier { name: "x" }
+                                thing: RawIdentifier("x".to_owned())
                             },
-                            param_type: Spanned {
+                            typ: Spanned {
                                 span: Span::from(((4, 1, 5), (6, 1, 7))),
-                                thing: RawIdentifier { name: "u2" }
+                                thing: RawIdentifier("u2".to_owned())
                             }
                         }
                     },
                     Spanned {
                         span: Span::from(((7, 1, 8), (13, 1, 14))),
-                        thing: RawParameter {
+                        thing: RawBindingDecl {
                             name: Spanned {
                                 span: Span::from(((7, 1, 8), (8, 1, 9))),
-                                thing: RawIdentifier { name: "y" }
+                                thing: RawIdentifier("y".to_owned())
                             },
-                            param_type: Spanned {
+                            typ: Spanned {
                                 span: Span::from(((11, 1, 12), (13, 1, 14))),
-                                thing: RawIdentifier { name: "u4" }
+                                thing: RawIdentifier("u4".to_owned())
                             }
                         }
                     }
@@ -589,27 +647,27 @@ mod tests {
             thing: RawFunctionSignature {
                 name: Identifier {
                     span: Span::from(((3, 1, 4), (8, 1, 9))),
-                    thing: RawIdentifier { name: "add_1" },
+                    thing: RawIdentifier("add_1".to_owned()),
                 },
-                parameters: ParameterList {
+                parameters: BindingDeclList {
                     span: Span::from(((9, 1, 10), (15, 1, 16))),
-                    thing: vec![Parameter {
+                    thing: vec![BindingDecl {
                         span: Span::from(((9, 1, 10), (15, 1, 16))),
-                        thing: RawParameter {
+                        thing: RawBindingDecl {
                             name: Identifier {
                                 span: Span::from(((9, 1, 10), (10, 1, 11))),
-                                thing: RawIdentifier { name: "x" },
+                                thing: RawIdentifier("x".to_owned()),
                             },
-                            param_type: Identifier {
+                            typ: Identifier {
                                 span: Span::from(((12, 1, 13), (15, 1, 16))),
-                                thing: RawIdentifier { name: "u32" },
+                                thing: RawIdentifier("u32".to_owned()),
                             },
                         },
                     }],
                 },
                 result_type: Identifier {
                     span: Span::from(((20, 1, 21), (23, 1, 24))),
-                    thing: RawIdentifier { name: "u16" },
+                    thing: RawIdentifier("u16".to_owned()),
                 },
             },
         };
@@ -1494,5 +1552,61 @@ mod tests {
         );
         assert_eq!((*lhs).span, Span::from(((1, 1, 2), (12, 1, 13))));
         assert_eq!((*rhs).span, Span::from(((15, 1, 16), (26, 1, 27))));
+    }
+
+    #[test]
+    fn test_parse_let_expression() -> () {
+        // whitespace accepted
+        all_consuming(parse_expression(None))(ParseInput::new("let  foo : u32 = bar;")).expect("");
+
+        // test the first variable decl, and the using expression
+        let s = r"let a: u32 = u32:1 * u32:2;
+        a & a";
+        let (bindings, using_expr) = expression_is_let(
+            all_consuming(parse_expression(None))(ParseInput::new(s))
+                .unwrap()
+                .1,
+        );
+        assert_eq!(
+            bindings.first().thing.variable_declaration.thing.name.thing,
+            RawIdentifier("a".to_owned())
+        );
+        assert_eq!(
+            bindings.first().thing.variable_declaration.thing.typ.thing,
+            RawIdentifier("u32".to_owned())
+        );
+        let (_, op, _) = expression_is_binary(*bindings.first().thing.value.clone());
+        assert_eq!(op, RawBinaryOperator::Multiply);
+        let (_, op, _) = expression_is_binary(*using_expr.unwrap());
+        assert_eq!(op, RawBinaryOperator::BitwiseAnd);
+
+        // test two bindings, and no using expression.
+        let s = r"let b: u16 = u16:1 + u16:2;
+        let c: u8 = u16:3;";
+        let (bindings, using_expr) = expression_is_let(
+            all_consuming(parse_expression(None))(ParseInput::new(s))
+                .unwrap()
+                .1,
+        );
+        assert_eq!(
+            bindings[0].thing.variable_declaration.thing.name.thing,
+            RawIdentifier("b".to_owned())
+        );
+        assert_eq!(
+            bindings[0].thing.variable_declaration.thing.typ.thing,
+            RawIdentifier("u16".to_owned())
+        );
+        assert_eq!(
+            bindings[1].thing.variable_declaration.thing.name.thing,
+            RawIdentifier("c".to_owned())
+        );
+        assert_eq!(
+            bindings[1].thing.variable_declaration.thing.typ.thing,
+            RawIdentifier("u8".to_owned())
+        );
+        let (_, op, _) = expression_is_binary(*bindings.first().thing.value.clone());
+        assert_eq!(op, RawBinaryOperator::Add);
+        let _ = expression_is_literal(*bindings[1].thing.value.clone());
+        assert_eq!(using_expr, None);
     }
 }

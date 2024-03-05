@@ -2,6 +2,7 @@
 //!
 //! Naming convention: RawFoo is the Foo not including the `Span`. Foo will include the `Span`.
 
+use nonempty::NonEmpty;
 use num_bigint::{BigInt, BigUint};
 use std::cmp::Ordering;
 
@@ -72,51 +73,46 @@ impl From<((usize, usize, usize), (usize, usize, usize))> for Span {
 }
 
 /// Represents a name of an entity, such as a type, variable, function, etc.
-#[derive(Debug, PartialEq)]
-pub struct RawIdentifier<'a> {
-    pub name: &'a str,
-}
+#[derive(Debug, PartialEq, Clone)]
+pub struct RawIdentifier(pub String);
 
-pub type Identifier<'a> = Spanned<RawIdentifier<'a>>;
+pub type Identifier = Spanned<RawIdentifier>;
 
-impl<'a> From<ParseInput<'a>> for RawIdentifier<'a> {
+impl<'a> From<ParseInput<'a>> for RawIdentifier {
     fn from(span: ParseInput<'a>) -> Self {
-        RawIdentifier {
-            name: span.fragment(),
-        }
+        RawIdentifier((*span.fragment()).to_owned())
     }
 }
 
-/// A parameter to a function, e.g., `foo: MyType`.
-#[derive(Debug, PartialEq)]
-pub struct RawParameter<'a> {
-    pub name: Identifier<'a>,
-    pub param_type: Identifier<'a>,
+/// Introduces a variable with its name and type, e.g., `foo : MyType`. E.g. used in function
+/// type signature parameter lists, `let` bindings, etc.
+#[derive(Debug, PartialEq, Clone)]
+pub struct RawBindingDecl {
+    pub name: Identifier,
+    pub typ: Identifier,
 }
 
-pub type Parameter<'a> = Spanned<RawParameter<'a>>;
-pub type ParameterList<'a> = Spanned<Vec<Parameter<'a>>>;
+pub type BindingDecl = Spanned<RawBindingDecl>;
+pub type BindingDeclList = Spanned<Vec<BindingDecl>>;
 
-impl<'a> From<(Identifier<'a>, Identifier<'a>)> for RawParameter<'a> {
-    fn from((name, param_type): (Identifier<'a>, Identifier<'a>)) -> Self {
-        RawParameter { name, param_type }
+impl From<(Identifier, Identifier)> for RawBindingDecl {
+    fn from((name, typ): (Identifier, Identifier)) -> Self {
+        RawBindingDecl { name, typ }
     }
 }
 
 /// A function signature, e.g: `fn foo(x:u32) -> u32`.
 #[derive(Debug, PartialEq)]
-pub struct RawFunctionSignature<'a> {
-    pub name: Identifier<'a>,
-    pub parameters: ParameterList<'a>,
-    pub result_type: Identifier<'a>,
+pub struct RawFunctionSignature {
+    pub name: Identifier,
+    pub parameters: BindingDeclList,
+    pub result_type: Identifier,
 }
 
-pub type FunctionSignature<'a> = Spanned<RawFunctionSignature<'a>>;
+pub type FunctionSignature = Spanned<RawFunctionSignature>;
 
-impl<'a> From<(Identifier<'a>, ParameterList<'a>, Identifier<'a>)> for RawFunctionSignature<'a> {
-    fn from(
-        (name, parameters, result_type): (Identifier<'a>, ParameterList<'a>, Identifier<'a>),
-    ) -> Self {
+impl From<(Identifier, BindingDeclList, Identifier)> for RawFunctionSignature {
+    fn from((name, parameters, result_type): (Identifier, BindingDeclList, Identifier)) -> Self {
         RawFunctionSignature {
             name,
             parameters,
@@ -370,11 +366,30 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
+/// *Part* of a let binding: the variable declaration and value it is bound to. What is missing
+/// is the expression in which the bound name is in-scope.
+#[derive(Debug, PartialEq, Clone)]
+pub struct RawLetBinding {
+    pub variable_declaration: BindingDecl,
+    pub value: Box<Expression>,
+}
+pub type LetBinding = Spanned<RawLetBinding>;
+
+// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
+// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
+// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
+// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParenthesizedExpression(pub Expression);
+
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
-    /// a literal, e.g. `s4:0b1001`
+    /// A literal, e.g. `s4:0b1001`
     Literal(Literal),
+
+    /// A name bound to a value (e.g. by a previous `let` expression, or a function argument).
+    Binding(Identifier),
 
     /// An expression that's surrounded by an open and close parentheses. The expression inside
     /// the parentheses will be evaluated with the highest precedence.
@@ -385,6 +400,14 @@ pub enum RawExpression {
 
     /// a binary expression, e.g. `s1:1 + s1:0`
     Binary(Box<Expression>, BinaryOperator, Box<Expression>),
+
+    /// 1 or more let expressions (i.e. the vector may be empty).
+    ///
+    /// Every binding is in scope in the bindings that come after it in the vector (i.e. a
+    /// binding is lexically scoped). The final expression, if present (and we expect it to
+    /// exist most of the time, otherwise, why bother with an if expression), can use all the
+    /// bindings. When absent, the value of the let expression is `()`.
+    Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
 }
 
 impl From<Literal> for RawExpression {
@@ -393,8 +416,14 @@ impl From<Literal> for RawExpression {
     }
 }
 
-impl From<Expression> for RawExpression {
-    fn from(x: Expression) -> Self {
+impl From<Identifier> for RawExpression {
+    fn from(x: Identifier) -> Self {
+        RawExpression::Binding(x)
+    }
+}
+
+impl From<ParenthesizedExpression> for RawExpression {
+    fn from(ParenthesizedExpression(x): ParenthesizedExpression) -> Self {
         RawExpression::Parenthesized(Box::new(x))
     }
 }
@@ -408,6 +437,12 @@ impl From<(UnaryOperator, Expression)> for RawExpression {
 impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
     fn from((lhs, op, rhs): (Expression, BinaryOperator, Expression)) -> Self {
         RawExpression::Binary(Box::new(lhs), op, Box::new(rhs))
+    }
+}
+
+impl From<(NonEmpty<LetBinding>, Option<Expression>)> for RawExpression {
+    fn from((bindings, using_expr): (NonEmpty<LetBinding>, Option<Expression>)) -> Self {
+        RawExpression::Let(bindings, using_expr.map(Box::new))
     }
 }
 
