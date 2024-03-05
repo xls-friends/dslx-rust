@@ -208,12 +208,12 @@ pub enum RawUnaryOperator {
 
 pub type UnaryOperator = Spanned<RawUnaryOperator>;
 
-/// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
-/// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
-/// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
-/// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+/// This struct exists to ensure that `From<Expr> for RawExpression` does not exist
+/// (because instead we have `From<ParenthesizedExpr> for RawExpression`). The former was
+/// bug prone: I was accidentally and unknowingly calling `from(Expr) -> RawExpression`.
+/// Inside the `from` we will discard the ParenthesizedExpr 'wrapper'.
 #[derive(Debug, PartialEq, Clone)]
-pub struct ParenthesizedExpression(pub Expression);
+pub struct ParenthesizedExpr(pub Expr);
 
 /// Operators for binary expressions.
 ///
@@ -375,10 +375,10 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
-/// This serves a similar purpose to ParenthesizedExpression.
+/// This serves a similar purpose to ParenthesizedExpr.
 ///
 /// see <https://google.github.io/xls/dslx_reference/#block-expressions>
-pub struct BlockExpression(pub Expression);
+pub struct BlockExpr(pub Expr);
 
 /// *Part* of a let binding: the variable declaration and value it is bound to. What is missing
 /// is the expression in which the bound name is in-scope.
@@ -387,7 +387,7 @@ pub struct BlockExpression(pub Expression);
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLetBinding {
     pub variable_declaration: BindingDecl,
-    pub value: Box<Expression>,
+    pub value: Box<Expr>,
 }
 pub type LetBinding = Spanned<RawLetBinding>;
 
@@ -397,12 +397,12 @@ pub type LetBinding = Spanned<RawLetBinding>;
 /// see <https://google.github.io/xls/dslx_reference/#if-expression>
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawConditionConsequent {
-    /// An Expression that must be Boolean typed. When evaluated, if true, then `consequent` is
+    /// An Expr that must be Boolean typed. When evaluated, if true, then `consequent` is
     /// the value of the enclosing `if` expression.
-    pub condition: Expression,
+    pub condition: Expr,
 
     /// The value of the `if` expression, if `condition` is true.
-    pub consequent: Expression,
+    pub consequent: Expr,
 }
 pub type ConditionConsequent = Spanned<RawConditionConsequent>;
 
@@ -410,7 +410,7 @@ pub type ConditionConsequent = Spanned<RawConditionConsequent>;
 ///
 /// See https://google.github.io/xls/dslx_reference/#expressions
 #[derive(Debug, PartialEq, Clone)]
-pub enum RawExpression {
+pub enum RawExpr {
     /// A literal, e.g. `s4:0b1001`
     Literal(Literal),
 
@@ -419,13 +419,13 @@ pub enum RawExpression {
 
     /// An expression that's surrounded by an open and close parentheses. The expression inside
     /// the parentheses will be evaluated with the highest precedence.
-    Parenthesized(Box<Expression>),
+    Parenthesized(Box<Expr>),
 
     /// a unary expression, e.g. `!s4:0b1001`
-    Unary(UnaryOperator, Box<Expression>),
+    Unary(UnaryOperator, Box<Expr>),
 
     /// a binary expression, e.g. `s1:1 + s1:0`
-    Binary(Box<Expression>, BinaryOperator, Box<Expression>),
+    Binary(Box<Expr>, BinaryOperator, Box<Expr>),
 
     /// Block expressions enable subordinate scopes to be defined. E.g.:
     ///
@@ -438,7 +438,7 @@ pub enum RawExpression {
     ///
     /// The value of a block expression is that of its last contained expression, or (), if a
     /// final expression is omitted:
-    Block(Box<Expression>),
+    Block(Box<Expr>),
 
     /// 1 or more let expressions (i.e. the vector may be empty).
     ///
@@ -446,63 +446,63 @@ pub enum RawExpression {
     /// binding is lexically scoped). The final expression, if present (and we expect it to
     /// exist most of the time, otherwise, why bother with an if expression), can use all the
     /// bindings. When absent, the value of the let expression is `()`.
-    Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
+    Let(NonEmpty<LetBinding>, Option<Box<Expr>>),
 
     /// 1 or more `if` and `else if` expressions, followed by the final `else`'s alternate
     /// expression. I.e., if all the conditions in the vector are `false`, this `if...else
     /// if...else` expression evalutes to the alternate expression.
-    IfElse(NonEmpty<Box<ConditionConsequent>>, Box<Expression>),
+    IfElse(NonEmpty<Box<ConditionConsequent>>, Box<Expr>),
 }
 
-impl From<Literal> for RawExpression {
+impl From<Literal> for RawExpr {
     fn from(x: Literal) -> Self {
-        RawExpression::Literal(x)
+        RawExpr::Literal(x)
     }
 }
 
-impl From<Identifier> for RawExpression {
+impl From<Identifier> for RawExpr {
     fn from(x: Identifier) -> Self {
-        RawExpression::Binding(x)
+        RawExpr::Binding(x)
     }
 }
 
-impl From<ParenthesizedExpression> for RawExpression {
-    fn from(ParenthesizedExpression(x): ParenthesizedExpression) -> Self {
-        RawExpression::Parenthesized(Box::new(x))
+impl From<ParenthesizedExpr> for RawExpr {
+    fn from(ParenthesizedExpr(x): ParenthesizedExpr) -> Self {
+        RawExpr::Parenthesized(Box::new(x))
     }
 }
 
-impl From<(UnaryOperator, Expression)> for RawExpression {
-    fn from((op, expr): (UnaryOperator, Expression)) -> Self {
-        RawExpression::Unary(op, Box::new(expr))
+impl From<(UnaryOperator, Expr)> for RawExpr {
+    fn from((op, expr): (UnaryOperator, Expr)) -> Self {
+        RawExpr::Unary(op, Box::new(expr))
     }
 }
 
-impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
-    fn from((lhs, op, rhs): (Expression, BinaryOperator, Expression)) -> Self {
-        RawExpression::Binary(Box::new(lhs), op, Box::new(rhs))
+impl From<(Expr, BinaryOperator, Expr)> for RawExpr {
+    fn from((lhs, op, rhs): (Expr, BinaryOperator, Expr)) -> Self {
+        RawExpr::Binary(Box::new(lhs), op, Box::new(rhs))
     }
 }
 
-impl From<BlockExpression> for RawExpression {
-    fn from(BlockExpression(x): BlockExpression) -> Self {
-        RawExpression::Block(Box::new(x))
+impl From<BlockExpr> for RawExpr {
+    fn from(BlockExpr(x): BlockExpr) -> Self {
+        RawExpr::Block(Box::new(x))
     }
 }
 
-impl From<(NonEmpty<LetBinding>, Option<Expression>)> for RawExpression {
-    fn from((bindings, using_expr): (NonEmpty<LetBinding>, Option<Expression>)) -> Self {
-        RawExpression::Let(bindings, using_expr.map(Box::new))
+impl From<(NonEmpty<LetBinding>, Option<Expr>)> for RawExpr {
+    fn from((bindings, using_expr): (NonEmpty<LetBinding>, Option<Expr>)) -> Self {
+        RawExpr::Let(bindings, using_expr.map(Box::new))
     }
 }
 
-impl From<(NonEmpty<ConditionConsequent>, Expression)> for RawExpression {
-    fn from((ifelses, alternate): (NonEmpty<ConditionConsequent>, Expression)) -> Self {
-        RawExpression::IfElse(ifelses.map(Box::new), Box::new(alternate))
+impl From<(NonEmpty<ConditionConsequent>, Expr)> for RawExpr {
+    fn from((ifelses, alternate): (NonEmpty<ConditionConsequent>, Expr)) -> Self {
+        RawExpr::IfElse(ifelses.map(Box::new), Box::new(alternate))
     }
 }
 
-pub type Expression = Spanned<RawExpression>;
+pub type Expr = Spanned<RawExpr>;
 
 /// A parsed thing (e.g. `Identifier`) and the corresponding Span in the source text.
 #[derive(Debug, PartialEq, Clone)]
