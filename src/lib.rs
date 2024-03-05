@@ -258,15 +258,15 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
 /// `s8:128`, `s8:-128`
 ///
 /// Uses the bit type to determine which kind of `RawInteger` to parse.
-fn parse_literal(input: ParseInput) -> ParseResult<Literal> {
-    fn parse(input: ParseInput) -> ParseResult<RawLiteral> {
+fn parse_literal<'a>(input: ParseInput<'a>) -> ParseResult<'a, Literal> {
+    let parse = |input: ParseInput<'a>| -> ParseResult<'a, RawLiteral> {
         let (input, bit_type) = terminated(parse_bit_type, tag_ws(":"))(input)?;
         let (rest, value): (ParseInput, Integer) = match bit_type.thing.signedness {
             Signedness::Signed => spanned(parse_signed_integer).parse(input),
             Signedness::Unsigned => spanned(parse_unsigned_integer).parse(input),
         }?;
         Ok((rest, RawLiteral { value, bit_type }))
-    }
+    };
 
     spanned(parse).parse(input)
 }
@@ -317,10 +317,10 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 /// expression after the let (after all, what's the point of declaring a variable binding if
 /// you're never going to use the variable?), but not required. So the trailing expression is
 /// optional.
-fn parse_let_expression(
-    input: ParseInput,
-) -> ParseResult<(NonEmpty<LetBinding>, Option<Expression>)> {
-    fn parse_let_binding(input: ParseInput) -> ParseResult<RawLetBinding> {
+fn parse_let_expression<'a>(
+    input: ParseInput<'a>,
+) -> ParseResult<'a, (NonEmpty<LetBinding>, Option<Expression>)> {
+    let parse_let_binding = |input: ParseInput<'a>| -> ParseResult<'a, RawLetBinding> {
         let var_decl = delimited(
             // let must be followed by at least 1 whitespace
             tuple((tag_ws("let"), whitespace_exactly1)),
@@ -334,7 +334,7 @@ fn parse_let_expression(
                 value: Box::new(value),
             })
             .parse(input)
-    }
+    };
 
     // We avoid a recursive parsing implementation of nested let expressions to avoid stack
     // overflows when fuzzing. Furthermore, we want to be as robust as possible, and not make
@@ -359,6 +359,11 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
             tag("("),
             parse_expression(None).map(ParenthesizedExpression),
             tag_ws(")"),
+        )),
+        spanned(delimited(
+            tag("{"),
+            parse_expression(None).map(BlockExpression),
+            tag_ws("}"),
         )),
         spanned(parse_let_expression),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
@@ -465,7 +470,7 @@ mod tests {
     fn expression_is_literal(x: Expression) -> RawLiteral {
         match x.thing {
             RawExpression::Literal(Spanned { span: _, thing }) => thing,
-            _ => panic!("wasn't literal expression"),
+            _ => panic!("wasn't Literal expression"),
         }
     }
 
@@ -473,7 +478,7 @@ mod tests {
     fn expression_is_unary(x: Expression) -> (RawUnaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Unary(Spanned { span: _, thing }, expr) => (thing, expr),
-            _ => panic!("wasn't unary expression"),
+            _ => panic!("wasn't Unary expression"),
         }
     }
 
@@ -483,7 +488,7 @@ mod tests {
     ) -> (Box<Expression>, RawBinaryOperator, Box<Expression>) {
         match x.thing {
             RawExpression::Binary(lhs, Spanned { span: _, thing: op }, rhs) => (lhs, op, rhs),
-            _ => panic!("wasn't binary expression"),
+            _ => panic!("wasn't Binary expression"),
         }
     }
 
@@ -491,7 +496,15 @@ mod tests {
     fn expression_is_parenthesized(x: Expression) -> Box<Expression> {
         match x.thing {
             RawExpression::Parenthesized(b) => b,
-            _ => panic!("wasn't parenthesized expression"),
+            _ => panic!("wasn't Parenthesized expression"),
+        }
+    }
+
+    // Panics if Expression is not the correct case
+    fn expression_is_block(x: Expression) -> Box<Expression> {
+        match x.thing {
+            RawExpression::Block(b) => b,
+            _ => panic!("wasn't Block expression"),
         }
     }
 
@@ -499,7 +512,7 @@ mod tests {
     fn expression_is_let(x: Expression) -> (NonEmpty<LetBinding>, Option<Box<Expression>>) {
         match x.thing {
             RawExpression::Let(xs, e) => (xs, e),
-            _ => panic!("wasn't let expression"),
+            _ => panic!("wasn't Let expression"),
         }
     }
 
@@ -1552,6 +1565,30 @@ mod tests {
         );
         assert_eq!((*lhs).span, Span::from(((1, 1, 2), (12, 1, 13))));
         assert_eq!((*rhs).span, Span::from(((15, 1, 16), (26, 1, 27))));
+    }
+
+    #[test]
+    fn test_parse_block_expression() -> () {
+        // mismatched/interleaved curly {} is wrong
+        all_consuming(parse_expression(None))(ParseInput::new("{u1:1")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("u1:1}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("{{u1:1}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("{u1:1}}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("{{u1}:1}}")).expect_err("");
+        all_consuming(parse_expression(None))(ParseInput::new("u1{:}1")).expect_err("");
+
+        // fix the above
+        all_consuming(parse_expression(None))(ParseInput::new("{u1:1}")).expect("");
+
+        // whitespace accepted
+        all_consuming(parse_expression(None))(ParseInput::new(" { u1 : 1 }")).expect("");
+
+        let inside = expression_is_block(
+            parse_expression(None)(ParseInput::new("{ let a: u32 = u32:1 * u32:2; a & a }"))
+                .unwrap()
+                .1,
+        );
+        expression_is_let(*inside);
     }
 
     #[test]

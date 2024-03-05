@@ -375,12 +375,15 @@ pub struct RawLetBinding {
 }
 pub type LetBinding = Spanned<RawLetBinding>;
 
-// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
-// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
-// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
-// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+/// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
+/// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
+/// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
+/// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParenthesizedExpression(pub Expression);
+
+/// This serves a similar purpose to ParenthesizedExpression.
+pub struct BlockExpression(pub Expression);
 
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
 #[derive(Debug, PartialEq, Clone)]
@@ -400,6 +403,19 @@ pub enum RawExpression {
 
     /// a binary expression, e.g. `s1:1 + s1:0`
     Binary(Box<Expression>, BinaryOperator, Box<Expression>),
+
+    /// Block expressions enable subordinate scopes to be defined. E.g.:
+    ///
+    /// ```
+    /// let a = {
+    ///   let b = u32:1;
+    ///   b + u32:3
+    /// };
+    /// ```
+    ///
+    /// The value of a block expression is that of its last contained expression, or (), if a
+    /// final expression is omitted:
+    Block(Box<Expression>),
 
     /// 1 or more let expressions (i.e. the vector may be empty).
     ///
@@ -437,6 +453,12 @@ impl From<(UnaryOperator, Expression)> for RawExpression {
 impl From<(Expression, BinaryOperator, Expression)> for RawExpression {
     fn from((lhs, op, rhs): (Expression, BinaryOperator, Expression)) -> Self {
         RawExpression::Binary(Box::new(lhs), op, Box::new(rhs))
+    }
+}
+
+impl From<BlockExpression> for RawExpression {
+    fn from(BlockExpression(x): BlockExpression) -> Self {
+        RawExpression::Block(Box::new(x))
     }
 }
 
