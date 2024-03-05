@@ -319,7 +319,7 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
 /// optional.
 fn parse_let_expression<'a>(
     input: ParseInput<'a>,
-) -> ParseResult<'a, (NonEmpty<LetBinding>, Option<Expression>)> {
+) -> ParseResult<'a, (NonEmpty<LetBinding>, Option<Expr>)> {
     let parse_let_binding = |input: ParseInput<'a>| -> ParseResult<'a, RawLetBinding> {
         let var_decl = delimited(
             // let must be followed by at least 1 whitespace
@@ -350,22 +350,61 @@ fn parse_let_expression<'a>(
     tuple((bindings, using_expr)).parse(input)
 }
 
+/// Parses an `if...else if...else` expression. E.g.
+/// `if condition0 { consequent0 } else if condition1 { consequent1 } else { alternate }`
+fn parse_ifelse_expression<'a>(
+    input: ParseInput<'a>,
+) -> ParseResult<'a, (NonEmpty<ConditionConsequent>, Expr)> {
+    let parse_if_condition_consequent =
+        |input: ParseInput<'a>| -> ParseResult<'a, RawConditionConsequent> {
+            let if_cond = preceded(
+                // if must be followed by at least 1 whitespace
+                tuple((tag_ws("if"), whitespace_exactly1)),
+                parse_expression(None),
+            );
+            let consequent = delimited(tag_ws("{"), parse_expression(None), tag_ws("}"));
+            tuple((if_cond, consequent))
+                .map(|(condition, consequent)| RawConditionConsequent {
+                    condition,
+                    consequent,
+                })
+                .parse(input)
+        };
+
+    // We avoid a recursive parsing implementation of nested if...else if expressions to avoid
+    // stack overflows when fuzzing.
+    let ifelses =
+        separated_list1(tag_ws("else"), spanned(parse_if_condition_consequent)).map(|xs| {
+            let mut ys = NonEmpty::new(xs.first().unwrap().clone());
+            ys.extend(xs.iter().skip(1).cloned());
+            ys
+        });
+
+    let alternate = preceded(
+        tag_ws("else"),
+        delimited(tag_ws("{"), parse_expression(None), tag_ws("}")),
+    );
+
+    tuple((ifelses, alternate)).parse(input)
+}
+
 /// Parses unary and atomic expressions. E.g., `-u1:1`, `(u1:1 + u1:0)`
-fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
+fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expr> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
     alt((
         spanned(delimited(
             tag("("),
-            parse_expression(None).map(ParenthesizedExpression),
+            parse_expression(None).map(ParenthesizedExpr),
             tag_ws(")"),
         )),
         spanned(delimited(
             tag("{"),
-            parse_expression(None).map(BlockExpression),
+            parse_expression(None).map(BlockExpr),
             tag_ws("}"),
         )),
         spanned(parse_let_expression),
+        spanned(parse_ifelse_expression),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
         spanned(parse_literal),
         spanned(parse_identifier),
@@ -374,15 +413,13 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
 }
 
 /// Parses a binary operator and the expression that follows it, given the expression preceding
-/// the operator, returning all of this is a binary `Expression`.
+/// the operator, returning all of this is a binary `Expr`.
 ///
-/// E.g. left=`u1:1`, input=`&& u1:1`, returns the Expression for `u1:1 && u1:1`
+/// E.g. left=`u1:1`, input=`&& u1:1`, returns the Expr for `u1:1 && u1:1`
 ///
 /// parse_infix_expression handles any and all kinds of expressions that would
 /// left-recursively call parse_expression
-fn parse_infix_expression<'a>(
-    left: Expression,
-) -> impl FnMut(ParseInput<'a>) -> ParseResult<Expression> {
+fn parse_infix_expression<'a>(left: Expr) -> impl FnMut(ParseInput<'a>) -> ParseResult<Expr> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
     //
@@ -392,7 +429,7 @@ fn parse_infix_expression<'a>(
 
     // Note: the spanned combinator can't be used here because `left` was passed to us (thus,
     // spanned can't capture the start).
-    move |input: ParseInput<'a>| -> ParseResult<Expression> {
+    move |input: ParseInput<'a>| -> ParseResult<Expr> {
         flat_map(parse_binary_operator, |op| {
             tuple((
                 success(left.clone()),
@@ -401,7 +438,7 @@ fn parse_infix_expression<'a>(
             ))
         })
         .map(|(left, op, right)| {
-            let thing = RawExpression::from((left.clone(), op, right.clone()));
+            let thing = RawExpr::from((left.clone(), op, right.clone()));
             Spanned {
                 span: Span {
                     start: left.span.start,
@@ -417,11 +454,11 @@ fn parse_infix_expression<'a>(
 /// Parses an expression (e.g. binary, unary, arbitrarily nested expressions), given the
 /// preceding binary operator (if one exists).
 ///
-/// E.g. input=`u1:1 && u1:1`, previous=`Some(||)`, will return the `Expression` `u1:1 && u1:1`
+/// E.g. input=`u1:1 && u1:1`, previous=`Some(||)`, will return the `Expr` `u1:1 && u1:1`
 /// because `&&` has higher precedence than `||`.
 fn parse_expression<'a>(
     previous: Option<RawBinaryOperator>,
-) -> impl FnMut(ParseInput<'a>) -> ParseResult<Expression> {
+) -> impl FnMut(ParseInput<'a>) -> ParseResult<Expr> {
     // this implementation follows the 'Top Down Operator Precedence' algorithm. See
     // <https://btmc.substack.com/p/how-to-parse-expressions-easy> or <https://tdop.github.io/>
 
@@ -466,53 +503,67 @@ mod tests {
     use nom_locate::LocatedSpan;
     use num_traits::cast::FromPrimitive;
 
-    // Panics if Expression is not the correct case
-    fn expression_is_literal(x: Expression) -> RawLiteral {
+    // Panics if Expr is not the correct case
+    fn expression_is_literal(x: Expr) -> RawLiteral {
         match x.thing {
-            RawExpression::Literal(Spanned { span: _, thing }) => thing,
+            RawExpr::Literal(Spanned { span: _, thing }) => thing,
             _ => panic!("wasn't Literal expression"),
         }
     }
 
-    // Panics if Expression is not the correct case
-    fn expression_is_unary(x: Expression) -> (RawUnaryOperator, Box<Expression>) {
+    // Panics if Expr is not the correct case
+    fn expression_is_binding(x: Expr) -> RawIdentifier {
         match x.thing {
-            RawExpression::Unary(Spanned { span: _, thing }, expr) => (thing, expr),
+            RawExpr::Binding(Spanned { span: _, thing }) => thing,
+            _ => panic!("wasn't Literal expression"),
+        }
+    }
+
+    // Panics if Expr is not the correct case
+    fn expression_is_unary(x: Expr) -> (RawUnaryOperator, Box<Expr>) {
+        match x.thing {
+            RawExpr::Unary(Spanned { span: _, thing }, expr) => (thing, expr),
             _ => panic!("wasn't Unary expression"),
         }
     }
 
-    // Panics if Expression is not the correct case
-    fn expression_is_binary(
-        x: Expression,
-    ) -> (Box<Expression>, RawBinaryOperator, Box<Expression>) {
+    // Panics if Expr is not the correct case
+    fn expression_is_binary(x: Expr) -> (Box<Expr>, RawBinaryOperator, Box<Expr>) {
         match x.thing {
-            RawExpression::Binary(lhs, Spanned { span: _, thing: op }, rhs) => (lhs, op, rhs),
+            RawExpr::Binary(lhs, Spanned { span: _, thing: op }, rhs) => (lhs, op, rhs),
             _ => panic!("wasn't Binary expression"),
         }
     }
 
-    // Panics if Expression is not the correct case
-    fn expression_is_parenthesized(x: Expression) -> Box<Expression> {
+    // Panics if Expr is not the correct case
+    fn expression_is_parenthesized(x: Expr) -> Box<Expr> {
         match x.thing {
-            RawExpression::Parenthesized(b) => b,
+            RawExpr::Parenthesized(b) => b,
             _ => panic!("wasn't Parenthesized expression"),
         }
     }
 
-    // Panics if Expression is not the correct case
-    fn expression_is_block(x: Expression) -> Box<Expression> {
+    // Panics if Expr is not the correct case
+    fn expression_is_block(x: Expr) -> Box<Expr> {
         match x.thing {
-            RawExpression::Block(b) => b,
+            RawExpr::Block(b) => b,
             _ => panic!("wasn't Block expression"),
         }
     }
 
-    // Panics if Expression is not the correct case
-    fn expression_is_let(x: Expression) -> (NonEmpty<LetBinding>, Option<Box<Expression>>) {
+    // Panics if Expr is not the correct case
+    fn expression_is_let(x: Expr) -> (NonEmpty<LetBinding>, Option<Box<Expr>>) {
         match x.thing {
-            RawExpression::Let(xs, e) => (xs, e),
+            RawExpr::Let(xs, e) => (xs, e),
             _ => panic!("wasn't Let expression"),
+        }
+    }
+
+    // Panics if Expr is not the correct case
+    fn expression_is_ifelse(x: Expr) -> (NonEmpty<Box<ConditionConsequent>>, Box<Expr>) {
+        match x.thing {
+            RawExpr::IfElse(xs, e) => (xs, e),
+            _ => panic!("wasn't ifelse expression"),
         }
     }
 
@@ -1645,5 +1696,133 @@ mod tests {
         assert_eq!(op, RawBinaryOperator::Add);
         let _ = expression_is_literal(*bindings[1].thing.value.clone());
         assert_eq!(using_expr, None);
+    }
+
+    #[test]
+    fn test_parse_ifelse_expression() -> () {
+        // basic
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            "if condition {whentrue} else {whenfalse}",
+        ))
+        .expect("");
+
+        // whitespace accepted
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            " if condition { whentrue } else { whenfalse }",
+        ))
+        .expect("");
+
+        // only necessary whitespace
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            "if condition{whentrue}else{whenfalse}",
+        ))
+        .expect("");
+
+        // if requires trailing whitespace
+        all_consuming(parse_ifelse_expression)(ParseInput::new(
+            "ifcondition{whentrue}else{whenfalse}",
+        ))
+        .expect_err("");
+
+        let (condition_consequent, alternate) = expression_is_ifelse(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "if condition {whentrue} else {whenfalse}",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(condition_consequent.len(), 1);
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
+
+        // an if expression inside another expression
+        let (_, op, rhs) = expression_is_binary(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "u1:1 + if condition {whentrue} else {whenfalse}",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(op, RawBinaryOperator::Add);
+        let (condition_consequent, alternate) = expression_is_ifelse(*rhs);
+        assert_eq!(condition_consequent.len(), 1);
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
+
+        // an if expression on the lhs of another expression
+        let (lhs, op, _) = expression_is_binary(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "if condition {whentrue} else {whenfalse} + u1:1",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(op, RawBinaryOperator::Add);
+        let (condition_consequent, alternate) = expression_is_ifelse(*lhs);
+        assert_eq!(condition_consequent.len(), 1);
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_parse_if_elseif_else_expression() -> () {
+        let (condition_consequent, alternate) = expression_is_ifelse(
+            all_consuming(parse_expression(None))(ParseInput::new(
+                "if condition {whentrue} else if condition2 {whentrue2} else {whenfalse}",
+            ))
+            .unwrap()
+            .1,
+        );
+        assert_eq!(condition_consequent.len(), 2);
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.condition.clone()),
+            RawIdentifier("condition".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding((*condition_consequent[0]).thing.consequent.clone()),
+            RawIdentifier("whentrue".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding((*condition_consequent[1]).thing.condition.clone()),
+            RawIdentifier("condition2".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding((*condition_consequent[1]).thing.consequent.clone()),
+            RawIdentifier("whentrue2".to_owned())
+        );
+        assert_eq!(
+            expression_is_binding(*alternate),
+            RawIdentifier("whenfalse".to_owned())
+        );
     }
 }
