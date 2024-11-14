@@ -62,6 +62,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          # TODO disallow dead code
-          # allow dead_code for now
-          args: -- -D warnings -A dead_code
+          # TODO disallow dead code eventually, when all leaf functions are being used by root
+          # functions
+          # elided_named_lifetimes are allowed, for brevity.
+          args: -- -D warnings -A dead_code -A elided_named_lifetimes
