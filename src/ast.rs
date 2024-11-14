@@ -185,6 +185,8 @@ impl From<BigInt> for RawInteger {
 pub type Integer = Spanned<RawInteger>;
 
 /// A literal, e.g. `s4:0b1001`.
+///
+/// see <https://google.github.io/xls/dslx_reference/#literals>
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLiteral {
     pub value: Integer,
@@ -205,6 +207,13 @@ pub enum RawUnaryOperator {
 }
 
 pub type UnaryOperator = Spanned<RawUnaryOperator>;
+
+/// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
+/// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
+/// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
+/// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParenthesizedExpression(pub Expression);
 
 /// Operators for binary expressions.
 ///
@@ -366,8 +375,15 @@ impl PartialOrd for RawBinaryOperator {
     }
 }
 
+/// This serves a similar purpose to ParenthesizedExpression.
+///
+/// see <https://google.github.io/xls/dslx_reference/#block-expressions>
+pub struct BlockExpression(pub Expression);
+
 /// *Part* of a let binding: the variable declaration and value it is bound to. What is missing
 /// is the expression in which the bound name is in-scope.
+///
+/// see <https://google.github.io/xls/dslx_reference/#let-expression>
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLetBinding {
     pub variable_declaration: BindingDecl,
@@ -375,17 +391,24 @@ pub struct RawLetBinding {
 }
 pub type LetBinding = Spanned<RawLetBinding>;
 
-/// This struct exists to ensure that `From<Expression> for RawExpression` does not exist
-/// (because instead we have `From<ParenthesizedExpression> for RawExpression`). The former was
-/// bug prone: I was accidentally and unknowingly calling `from(Expression) -> RawExpression`.
-/// Inside the `from` we will discard the ParenthesizedExpression 'wrapper'.
+/// The condition and consequent of the first half of an `if` expression:
+/// `if condition { consequent }`
+///
+/// see <https://google.github.io/xls/dslx_reference/#if-expression>
 #[derive(Debug, PartialEq, Clone)]
-pub struct ParenthesizedExpression(pub Expression);
+pub struct RawConditionConsequent {
+    /// An Expression that must be Boolean typed. When evaluated, if true, then `consequent` is
+    /// the value of the enclosing `if` expression.
+    pub condition: Expression,
 
-/// This serves a similar purpose to ParenthesizedExpression.
-pub struct BlockExpression(pub Expression);
+    /// The value of the `if` expression, if `condition` is true.
+    pub consequent: Expression,
+}
+pub type ConditionConsequent = Spanned<RawConditionConsequent>;
 
 /// An expression (i.e. a thing that can be evaluated), e.g. `s1:1 + s1:0`.
+///
+/// See https://google.github.io/xls/dslx_reference/#expressions
 #[derive(Debug, PartialEq, Clone)]
 pub enum RawExpression {
     /// A literal, e.g. `s4:0b1001`
@@ -424,6 +447,11 @@ pub enum RawExpression {
     /// exist most of the time, otherwise, why bother with an if expression), can use all the
     /// bindings. When absent, the value of the let expression is `()`.
     Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
+
+    /// 1 or more `if` and `else if` expressions, followed by the final `else`'s alternate
+    /// expression. I.e., if all the conditions in the vector are `false`, this `if...else
+    /// if...else` expression evalutes to the alternate expression.
+    IfElse(NonEmpty<Box<ConditionConsequent>>, Box<Expression>),
 }
 
 impl From<Literal> for RawExpression {
@@ -465,6 +493,12 @@ impl From<BlockExpression> for RawExpression {
 impl From<(NonEmpty<LetBinding>, Option<Expression>)> for RawExpression {
     fn from((bindings, using_expr): (NonEmpty<LetBinding>, Option<Expression>)) -> Self {
         RawExpression::Let(bindings, using_expr.map(Box::new))
+    }
+}
+
+impl From<(NonEmpty<ConditionConsequent>, Expression)> for RawExpression {
+    fn from((ifelses, alternate): (NonEmpty<ConditionConsequent>, Expression)) -> Self {
+        RawExpression::IfElse(ifelses.map(Box::new), Box::new(alternate))
     }
 }
 
