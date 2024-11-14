@@ -8,7 +8,8 @@
 // TODO one day when all functions in this file are used, delete below. For now, we prefer to
 // avoid spammy Github Actions notes about unused functions.
 #![allow(dead_code)]
-
+// We prerfer brevity.
+#[allow(elided_named_lifetimes)]
 pub mod ast;
 
 use ast::*;
