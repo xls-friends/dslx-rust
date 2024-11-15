@@ -221,6 +221,7 @@ pub struct ParenthesizedExpression(pub Expression);
 /// <https://google.github.io/xls/dslx_reference/#shift-expressions>
 /// <https://google.github.io/xls/dslx_reference/#comparison-expressions>
 /// <https://google.github.io/xls/dslx_reference/#concat-expression>
+/// <https://google.github.io/xls/dslx_reference/#iterable-expression>
 ///
 /// They are ordered from highest precedence to lowest, and grouped when same precedence.
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -267,6 +268,12 @@ pub enum RawBinaryOperator {
 
     /// `||`, boolean or
     BooleanOr,
+
+    /// `..`, creates a range expression, e.g. `u32:0 .. u32:8`, which expands to the integral
+    /// values [0, 8). Currently, only the Rust RangeExpr form is supported
+    /// (https://doc.rust-lang.org/reference/expressions/range-expr.html), i.e., the 5 other
+    /// variants are not implemented (RangeFromExpr, RangeToExpr, etc.).
+    Range,
 }
 
 pub type BinaryOperator = Spanned<RawBinaryOperator>;
@@ -292,6 +299,7 @@ impl RawBinaryOperator {
             RawBinaryOperator::Less => true,
             RawBinaryOperator::BooleanAnd => false,
             RawBinaryOperator::BooleanOr => false,
+            RawBinaryOperator::Range => false,
         }
     }
 }
@@ -364,10 +372,14 @@ impl PartialOrd for RawBinaryOperator {
                 (Self::BooleanAnd, _) => Some(Ordering::Greater),
                 (_, Self::BooleanAnd) => Some(Ordering::Less),
 
-                // We avoid a wildcard match so that we update this logic when new cases are added
+                (Self::BooleanOr, _) => Some(Ordering::Greater),
+                (_, Self::BooleanOr) => Some(Ordering::Less),
+
+                // This is required to satisfy the exhaustiveness checker.
                 //
-                // Required to satisfy the exhaustiveness checker
-                (Self::BooleanOr, Self::BooleanOr) => {
+                // We avoid a wildcard match so that we are forced to update this logic when
+                // new cases are added.
+                (Self::Range, Self::Range) => {
                     panic!("logically impossible because of PartialEq::eq(self, other) above")
                 }
             }
@@ -446,6 +458,9 @@ pub enum RawExpression {
     /// binding is lexically scoped). The final expression, if present (and we expect it to
     /// exist most of the time, otherwise, why bother with an if expression), can use all the
     /// bindings. When absent, the value of the let expression is `()`.
+    // TODO FIXME let is not an expression; it's a statement. It's not even an Expr in DSLX C++
+    // code:
+    // https://github.com/google/xls/blob/aad0d13240cc3ad413a03cc292e9d3acf1fb79c6/xls/dslx/frontend/parser.cc#L2452
     Let(NonEmpty<LetBinding>, Option<Box<Expression>>),
 
     /// 1 or more `if` and `else if` expressions, followed by the final `else`'s alternate
@@ -578,6 +593,7 @@ mod tests {
         is_reflexive(RawBinaryOperator::Less);
         is_reflexive(RawBinaryOperator::BooleanAnd);
         is_reflexive(RawBinaryOperator::BooleanOr);
+        is_reflexive(RawBinaryOperator::Range);
 
         // Multiply highest precedence
         let it = vec![
@@ -597,6 +613,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -630,6 +647,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -654,6 +672,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -673,6 +692,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -690,6 +710,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -706,6 +727,7 @@ mod tests {
             RawBinaryOperator::Less,
             RawBinaryOperator::BooleanAnd,
             RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
         ]
         .into_iter();
         for op in it {
@@ -727,7 +749,12 @@ mod tests {
             same_precedence(ops[0], ops[1]);
         }
         // comparison next-highest precedence
-        let it = vec![RawBinaryOperator::BooleanAnd, RawBinaryOperator::BooleanOr].into_iter();
+        let it = vec![
+            RawBinaryOperator::BooleanAnd,
+            RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
+        ]
+        .into_iter();
         for op in it {
             this_greater_than_that(RawBinaryOperator::Equal, op);
             this_greater_than_that(RawBinaryOperator::NotEqual, op);
@@ -737,7 +764,15 @@ mod tests {
             this_greater_than_that(RawBinaryOperator::Less, op);
         }
 
-        // last two
-        this_greater_than_that(RawBinaryOperator::BooleanAnd, RawBinaryOperator::BooleanOr);
+        // next is BooleanAnd
+        let it = vec![RawBinaryOperator::BooleanOr, RawBinaryOperator::Range].into_iter();
+        for op in it {
+            this_greater_than_that(RawBinaryOperator::BooleanAnd, op);
+        }
+
+        // next is BooleanOr
+        this_greater_than_that(RawBinaryOperator::BooleanOr, RawBinaryOperator::Range);
+
+        // Range is lowest
     }
 }

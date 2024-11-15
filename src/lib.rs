@@ -8,6 +8,8 @@
 // TODO one day when all functions in this file are used, delete below. For now, we prefer to
 // avoid spammy Github Actions notes about unused functions.
 #![allow(dead_code)]
+// We prefer brevity.
+#![allow(elided_named_lifetimes)]
 pub mod ast;
 
 use ast::*;
@@ -306,6 +308,8 @@ fn parse_binary_operator(input: ParseInput) -> ParseResult<BinaryOperator> {
         value(RawBinaryOperator::Greater, tag(">")),
         value(RawBinaryOperator::LessOrEqual, tag("<=")),
         value(RawBinaryOperator::Less, tag("<")),
+        // other
+        value(RawBinaryOperator::Range, tag("..")),
     ));
     spanned(op).parse(input)
 }
@@ -402,7 +406,7 @@ fn parse_unary_atomic_expression(input: ParseInput) -> ParseResult<Expression> {
             parse_expression(None).map(BlockExpression),
             tag_ws("}"),
         )),
-        spanned(parse_let_expression),
+        spanned(parse_let_expression), // TODO FIXME let is not an expression
         spanned(parse_ifelse_expression),
         spanned(tuple((parse_unary_operator, parse_unary_atomic_expression))),
         spanned(parse_literal),
@@ -439,14 +443,12 @@ fn parse_infix_expression<'a>(
             ))
         })
         .map(|(left, op, right)| {
-            let thing = RawExpression::from((left.clone(), op, right.clone()));
-            Spanned {
-                span: Span {
-                    start: left.span.start,
-                    end: right.span.end,
-                },
-                thing,
-            }
+            let span = Span {
+                start: left.span.start.clone(),
+                end: right.span.end.clone(),
+            };
+            let thing = RawExpression::from((left, op, right));
+            Spanned { span, thing }
         })
         .parse(input)
     }
@@ -497,6 +499,7 @@ fn parse_expression<'a>(
     }
 }
 
+// TODO PR suggestion: move all tests to own file
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -508,7 +511,7 @@ mod tests {
     fn expression_is_literal(x: Expression) -> RawLiteral {
         match x.thing {
             RawExpression::Literal(Spanned { span: _, thing }) => thing,
-            _ => panic!("wasn't Literal expression"),
+            e => panic!("wasn't Literal expression: {:?}", e),
         }
     }
 
@@ -1485,6 +1488,14 @@ mod tests {
             let _ = expression_is_literal(*lhs);
             let _ = expression_is_literal(*rhs);
         }
+
+        // range operator is lower precedence than boolean or
+        first_then(
+            "u1:0 || u1:0 .. u1:1",
+            RawBinaryOperator::BooleanOr,
+            RawBinaryOperator::Range,
+            FirstsLocation::LeftHandSide,
+        );
     }
 
     // Tests parsing of expressions containing (), asserts that
