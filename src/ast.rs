@@ -101,6 +101,20 @@ impl From<(Identifier, Identifier)> for RawBindingDecl {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct RawStructDecl {
+    pub name: Identifier,
+    pub fields: BindingDeclList,
+}
+
+pub type StructDecl = Spanned<RawStructDecl>;
+
+impl From<(Identifier, BindingDeclList)> for RawStructDecl {
+    fn from((name, fields): (Identifier, BindingDeclList)) -> Self {
+        RawStructDecl { name, fields }
+    }
+}
+
 /// A function signature, e.g: `fn foo(x:u32) -> u32`.
 #[derive(Debug, PartialEq)]
 pub struct RawFunctionSignature {
