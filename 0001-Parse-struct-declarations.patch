@@ -1,0 +1,118 @@
+From acc774451a48f27a2dac9acc8232088755e395a3 Mon Sep 17 00:00:00 2001
+From: Derek Lockhart <dmlockhart@gmail.com>
+Date: Fri, 10 Jan 2025 23:32:01 -0800
+Subject: [PATCH] Parse struct declarations
+
+---
+ src/ast.rs | 14 ++++++++++++
+ src/lib.rs | 62 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 76 insertions(+)
+
+diff --git a/src/ast.rs b/src/ast.rs
+index a86face..c1e8abf 100644
+--- a/src/ast.rs
++++ b/src/ast.rs
+@@ -101,6 +101,20 @@ impl From<(Identifier, Identifier)> for RawBindingDecl {
+     }
+ }
+ 
++#[derive(Debug, PartialEq)]
++pub struct RawStructDecl {
++    pub name: Identifier,
++    pub fields: BindingDeclList,
++}
++
++pub type StructDecl = Spanned<RawStructDecl>;
++
++impl From<(Identifier, BindingDeclList)> for RawStructDecl {
++    fn from((name, fields): (Identifier, BindingDeclList)) -> Self {
++        RawStructDecl { name, fields }
++    }
++}
++
+ /// A function signature, e.g: `fn foo(x:u32) -> u32`.
+ #[derive(Debug, PartialEq)]
+ pub struct RawFunctionSignature {
+diff --git a/src/lib.rs b/src/lib.rs
+index 20cfb1f..75aa42c 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -96,6 +96,13 @@ fn parse_variable_declaration(input: ParseInput) -> ParseResult<BindingDecl> {
+     .parse(input)
+ }
+ 
++/// Parses a struct declaration, e.g., `struct coord { x: u8, y: u8, }`.
++fn parse_struct_declaration(input: ParseInput) -> ParseResult<StructDecl> {
++    let name = preceded(tag_ws("struct"), parse_identifier);
++    let parameters = delimited(tag_ws("{"), parse_parameter_list0, tag_ws("}"));
++    spanned(tuple((name, parameters))).parse(input)
++}
++
+ /// Parses a comma-separated list of variable declarations, e.g., `x: u32, y: MyCustomType`.
+ /// Note that a trailing comma will not be matched or consumed by this function.
+ fn parse_parameter_list0(input: ParseInput) -> ParseResult<BindingDeclList> {
+@@ -664,6 +671,61 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn test_parse_struct_declaration() -> () {
++        let p = match parse_struct_declaration(
++            //               123456789112345678921234567893
++            ParseInput::new(" struct foo { x : u8, y: u4 } ")) {
++            Ok(x) => x.1,
++            Err(e) => {
++                eprintln!("Error: {}", e);
++                panic!()
++            }
++        };
++        assert_eq!(
++            p,
++            Spanned {
++                span: Span::from(((1, 1, 2), (29, 1, 30))),
++                thing: RawStructDecl {
++                    name: Spanned {
++                        span: Span::from(((8, 1, 9), (11, 1, 12))),
++                        thing: RawIdentifier("foo".to_owned())
++                    },
++                    fields: BindingDeclList {
++                        span: Span::from(((14, 1, 15), (27, 1, 28))),
++                        thing: vec![BindingDecl {
++                            span: Span::from(((14, 1, 15), (20, 1, 21))),
++                            thing: RawBindingDecl {
++                                name: Identifier {
++                                    span: Span::from(((14, 1, 15), (15, 1, 16))),
++                                    thing: RawIdentifier("x".to_owned()),
++                                },
++                                typ: Identifier {
++                                    span: Span::from(((18, 1, 19), (20, 1, 21))),
++                                    thing: RawIdentifier("u8".to_owned()),
++                                },
++                            },
++                        },
++                        BindingDecl {
++                            span: Span::from(((22, 1, 23), (27, 1, 28))),
++                            thing: RawBindingDecl {
++                                name: Identifier {
++                                    span: Span::from(((22, 1, 23), (23, 1, 24))),
++                                    thing: RawIdentifier("y".to_owned()),
++                                },
++                                typ: Identifier {
++                                    span: Span::from(((25, 1, 26), (27, 1, 28))),
++                                    thing: RawIdentifier("u4".to_owned()),
++                                },
++                            },
++                        },
++                        ],
++                    },
++                }
++            }
++        );
++    }
++
+     #[test]
+     fn test_parse_parameter_list0() -> () {
+         let p = match parse_parameter_list0(ParseInput::new("x : u2,y : u4")) {
+-- 
+2.39.3 (Apple Git-146)
+

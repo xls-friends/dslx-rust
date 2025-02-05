@@ -96,6 +96,13 @@ fn parse_variable_declaration(input: ParseInput) -> ParseResult<BindingDecl> {
     .parse(input)
 }
 
+/// Parses a struct declaration, e.g., `struct coord { x: u8, y: u8, }`.
+fn parse_struct_declaration(input: ParseInput) -> ParseResult<StructDecl> {
+    let name = preceded(tag_ws("struct"), parse_identifier);
+    let parameters = delimited(tag_ws("{"), parse_parameter_list0, tag_ws("}"));
+    spanned(tuple((name, parameters))).parse(input)
+}
+
 /// Parses a comma-separated list of variable declarations, e.g., `x: u32, y: MyCustomType`.
 /// Note that a trailing comma will not be matched or consumed by this function.
 fn parse_parameter_list0(input: ParseInput) -> ParseResult<BindingDeclList> {
@@ -659,6 +666,60 @@ mod tests {
                         span: Span::from(((5, 1, 6), (7, 1, 8))),
                         thing: RawIdentifier("u2".to_owned())
                     }
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_struct_declaration() -> () {
+        let p = match parse_struct_declaration(ParseInput::new(" struct foo { x : u8, y: u4 } ")) {
+            Ok(x) => x.1,
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                panic!()
+            }
+        };
+        assert_eq!(
+            p,
+            Spanned {
+                span: Span::from(((1, 1, 2), (29, 1, 30))),
+                thing: RawStructDecl {
+                    name: Spanned {
+                        span: Span::from(((8, 1, 9), (11, 1, 12))),
+                        thing: RawIdentifier("foo".to_owned())
+                    },
+                    fields: BindingDeclList {
+                        span: Span::from(((14, 1, 15), (27, 1, 28))),
+                        thing: vec![
+                            BindingDecl {
+                                span: Span::from(((14, 1, 15), (20, 1, 21))),
+                                thing: RawBindingDecl {
+                                    name: Identifier {
+                                        span: Span::from(((14, 1, 15), (15, 1, 16))),
+                                        thing: RawIdentifier("x".to_owned()),
+                                    },
+                                    typ: Identifier {
+                                        span: Span::from(((18, 1, 19), (20, 1, 21))),
+                                        thing: RawIdentifier("u8".to_owned()),
+                                    },
+                                },
+                            },
+                            BindingDecl {
+                                span: Span::from(((22, 1, 23), (27, 1, 28))),
+                                thing: RawBindingDecl {
+                                    name: Identifier {
+                                        span: Span::from(((22, 1, 23), (23, 1, 24))),
+                                        thing: RawIdentifier("y".to_owned()),
+                                    },
+                                    typ: Identifier {
+                                        span: Span::from(((25, 1, 26), (27, 1, 28))),
+                                        thing: RawIdentifier("u4".to_owned()),
+                                    },
+                                },
+                            },
+                        ],
+                    },
                 }
             }
         );
