@@ -218,7 +218,8 @@ fn parse_signed_integer(input: ParseInput) -> ParseResult<BigInt> {
 /// `sN[3]`
 ///
 /// See <https://google.github.io/xls/dslx_reference/#bit-type>
-fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
+fn parse_bit_type(input: ParseInput) -> ParseResult<BitTypeAnnotation> {
+    println!("PBT:");
     // {s,u}
     let sign = alt((
         char('s').map(|_| Signedness::Signed),
@@ -256,6 +257,29 @@ fn parse_bit_type(input: ParseInput) -> ParseResult<BitType> {
     );
 
     spanned(alt((explicitly_signed_type, bits))).parse(input)
+}
+
+fn parse_tuple_type_annotation(input: ParseInput) -> ParseResult<TupleTypeAnnotation> {
+    let the_types = delimited(
+        tag_ws("("),
+        separated_list0(tag_ws(","), parse_type_annotation),
+        tag_ws(")"),
+    );
+    spanned(the_types).parse(input)
+}
+
+fn parse_type_annotation<'a>(input: ParseInput<'a>) -> ParseResult<'a, TypeAnnotation> {
+    let parse_bit = |pi: ParseInput<'a>| -> ParseResult<'a, TypeAnnotation> {
+        let (rest, annot) = parse_bit_type(pi)?;
+        Ok((rest, ast::TypeAnnotation::BitType(annot)))
+    };
+
+    let parse_tuple = |pi: ParseInput<'a>| -> ParseResult<'a, TypeAnnotation> {
+        let (rest, annot) = parse_tuple_type_annotation(pi)?;
+        Ok((rest, ast::TypeAnnotation::TupleType(annot)))
+    };
+
+    alt((parse_bit, parse_tuple)).parse(input)
 }
 
 /// Parses a literal expression. E.g.,
@@ -1048,7 +1072,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("s1")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Signed,
                 width: Usize(1)
             }
@@ -1057,7 +1081,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("u1")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(1)
             }
@@ -1087,7 +1111,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("sN[1]")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Signed,
                 width: Usize(1)
             }
@@ -1096,7 +1120,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("uN[1]")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(1)
             }
@@ -1106,7 +1130,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("sN[4294967295]")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Signed,
                 width: Usize(4294967295)
             }
@@ -1114,7 +1138,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("uN[4294967295]")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(4294967295)
             }
@@ -1149,7 +1173,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("bits[1]")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(1)
             }
@@ -1159,7 +1183,7 @@ mod tests {
         let (_, r) = parse_bit_type(ParseInput::new("bits[4294967295]")).unwrap();
         assert_eq!(
             r.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(4294967295)
             }
@@ -1203,7 +1227,7 @@ mod tests {
         );
         assert_eq!(
             r.thing.bit_type.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(8)
             }
@@ -1217,7 +1241,7 @@ mod tests {
         );
         assert_eq!(
             r.thing.bit_type.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Signed,
                 width: Usize(51)
             }
@@ -1231,7 +1255,7 @@ mod tests {
         );
         assert_eq!(
             r.thing.bit_type.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(13)
             }
@@ -1245,7 +1269,7 @@ mod tests {
         );
         assert_eq!(
             r.thing.bit_type.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Signed,
                 width: Usize(7)
             }
@@ -1259,7 +1283,7 @@ mod tests {
         );
         assert_eq!(
             r.thing.bit_type.thing,
-            RawBitType {
+            RawBitTypeAnnotation {
                 signedness: Signedness::Unsigned,
                 width: Usize(17)
             }
@@ -1900,5 +1924,111 @@ mod tests {
             expression_is_binding(*alternate),
             RawIdentifier("whenfalse".to_owned())
         );
+    }
+
+    #[test]
+    fn test_parse_simple_tuple_type_annotations() -> () {
+        let (_, annot) = parse_tuple_type_annotation(ParseInput::new("()")).unwrap();
+        assert_eq!(annot.thing.elements.len(), 0);
+
+        let (_, annot) = parse_tuple_type_annotation(ParseInput::new("(u32)")).unwrap();
+        assert_eq!(annot.thing.elements.len(), 1);
+        let TypeAnnotation::BitType(ref bt) = annot.thing.elements[0] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Unsigned);
+        assert_eq!(bt.thing.width, ast::Usize(32));
+
+        let (_, annot) = parse_tuple_type_annotation(ParseInput::new("(u32, s17)")).unwrap();
+        assert_eq!(annot.thing.elements.len(), 2);
+        let TypeAnnotation::BitType(ref bt) = annot.thing.elements[0] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Unsigned);
+        assert_eq!(bt.thing.width, ast::Usize(32));
+        let TypeAnnotation::BitType(ref bt) = annot.thing.elements[1] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Signed);
+        assert_eq!(bt.thing.width, ast::Usize(17))
+    }
+
+    #[test]
+    fn test_parse_multilevel_tuple_type_annotations() -> () {
+        let (_, annot) = parse_tuple_type_annotation(ParseInput::new("((u32))")).unwrap();
+        assert_eq!(annot.thing.elements.len(), 1);
+        let TypeAnnotation::TupleType(ref tt) = annot.thing.elements[0] else {
+            panic!()
+        };
+        let TypeAnnotation::BitType(ref bt) = tt.thing.elements[0] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Unsigned);
+        assert_eq!(bt.thing.width, ast::Usize(32));
+    }
+
+    #[test]
+    fn test_parse_mixed_tuple_type_annotations() -> () {
+        // Sorry. Gross.
+        let (_rest, annot) =
+            parse_tuple_type_annotation(ParseInput::new("(u1, s2, (u3, (s4, (u5, (), s6))))"))
+                .unwrap();
+
+        // Level 1.
+        assert_eq!(annot.thing.elements.len(), 3);
+        let TypeAnnotation::BitType(ref bt) = annot.thing.elements[0] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Unsigned);
+        assert_eq!(bt.thing.width, ast::Usize(1));
+        let TypeAnnotation::BitType(ref bt) = annot.thing.elements[1] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Signed);
+        assert_eq!(bt.thing.width, ast::Usize(2));
+
+        // Level 2.
+        let TypeAnnotation::TupleType(ref tt) = annot.thing.elements[2] else {
+            panic!()
+        };
+        assert_eq!(tt.thing.elements.len(), 2);
+        let TypeAnnotation::BitType(ref bt) = tt.thing.elements[0] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Unsigned);
+        assert_eq!(bt.thing.width, ast::Usize(3));
+
+        // Level 3.
+        let TypeAnnotation::TupleType(ref tt) = tt.thing.elements[1] else {
+            panic!()
+        };
+        assert_eq!(tt.thing.elements.len(), 2);
+        let TypeAnnotation::BitType(ref bt) = tt.thing.elements[0] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Signed);
+        assert_eq!(bt.thing.width, ast::Usize(4));
+
+        // Level 4.
+        let TypeAnnotation::TupleType(ref tt) = tt.thing.elements[1] else {
+            panic!()
+        };
+        assert_eq!(tt.thing.elements.len(), 3);
+        let TypeAnnotation::BitType(ref bt) = tt.thing.elements[0] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Unsigned);
+        assert_eq!(bt.thing.width, ast::Usize(5));
+
+        let TypeAnnotation::TupleType(ref lil_tuple) = tt.thing.elements[1] else {
+            panic!()
+        };
+        assert_eq!(lil_tuple.thing.elements.len(), 0);
+
+        let TypeAnnotation::BitType(ref bt) = tt.thing.elements[2] else {
+            panic!()
+        };
+        assert_eq!(bt.thing.signedness, Signedness::Signed);
+        assert_eq!(bt.thing.width, ast::Usize(6));
     }
 }

@@ -158,7 +158,7 @@ pub struct Usize(pub u32);
 ///
 /// See <https://google.github.io/xls/dslx_reference/#bit-type>
 #[derive(Debug, PartialEq, Clone)]
-pub struct RawBitType {
+pub struct RawBitTypeAnnotation {
     /// A bit type is differentiated on if it's signed or unsigned.
     pub signedness: Signedness,
 
@@ -166,14 +166,46 @@ pub struct RawBitType {
     pub width: Usize,
 }
 
-pub type BitType = Spanned<RawBitType>;
+pub type BitTypeAnnotation = Spanned<RawBitTypeAnnotation>;
 
-impl From<(Signedness, u32)> for RawBitType {
+impl From<(Signedness, u32)> for RawBitTypeAnnotation {
     fn from((signedness, width): (Signedness, u32)) -> Self {
-        RawBitType {
+        RawBitTypeAnnotation {
             signedness,
             width: Usize(width),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct RawTupleTypeAnnotation {
+    pub elements: Vec<TypeAnnotation>,
+}
+
+pub type TupleTypeAnnotation = Spanned<RawTupleTypeAnnotation>;
+
+impl From<Vec<TypeAnnotation>> for RawTupleTypeAnnotation {
+    fn from(elements: Vec<TypeAnnotation>) -> Self {
+        RawTupleTypeAnnotation { elements }
+    }
+}
+
+#[derive(Debug)]
+pub enum TypeAnnotation {
+    BitType(BitTypeAnnotation),
+    TupleType(TupleTypeAnnotation),
+}
+
+// impl From<BitTypeAnnotation> for TypeAnnotation {
+impl From<BitTypeAnnotation> for TypeAnnotation {
+    fn from(x: BitTypeAnnotation) -> Self {
+        TypeAnnotation::BitType(x)
+    }
+}
+
+impl From<TupleTypeAnnotation> for TypeAnnotation {
+    fn from(x: TupleTypeAnnotation) -> Self {
+        TypeAnnotation::TupleType(x)
     }
 }
 
@@ -204,7 +236,7 @@ pub type Integer = Spanned<RawInteger>;
 #[derive(Debug, PartialEq, Clone)]
 pub struct RawLiteral {
     pub value: Integer,
-    pub bit_type: BitType,
+    pub bit_type: BitTypeAnnotation,
 }
 
 pub type Literal = Spanned<RawLiteral>;
